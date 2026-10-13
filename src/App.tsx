@@ -64,12 +64,22 @@ function App() {
           <button type="button" className="check-btn" onClick={dealCheck}>
             Deal check
           </button>
-          {deal && (
-            <p className="deal-result">
+        </div>
+        {deal && (
+          <>
+            <div className="card-row">
+              {deal.map((card) => (
+                <CardView key={card.id} card={card} faceUp theme={theme} width={90} />
+              ))}
+            </div>
+            <p
+              className="deal-result"
+              style={{ marginTop: 8, fontSize: '0.8rem', color: '#555' }}
+            >
               {deal.map((card) => cardLabel(card)).join(', ')}
             </p>
-          )}
-        </div>
+          </>
+        )}
       </section>
     </main>
   )
