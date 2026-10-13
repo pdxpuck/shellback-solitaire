@@ -39,6 +39,34 @@ export function initialState(seed: string): GameState {
   return { seed, moves: [] }
 }
 
+// --- deal numbers ------------------------------------------------------------
+
+/**
+ * Every deal carries an integer game # in [DEAL_MIN, DEAL_MAX]; the number
+ * IS the seed, so quoting a deal # replays that exact layout. Legacy seeds
+ * (arbitrary strings from pre-0.3.2) remain valid and simply have no #.
+ */
+export const DEAL_MIN = 1
+export const DEAL_MAX = 1_000_000
+
+/** A uniform-random deal number — the # for a fresh deal. */
+export function randomDealNumber(): number {
+  return DEAL_MIN + Math.floor(Math.random() * (DEAL_MAX - DEAL_MIN + 1))
+}
+
+/**
+ * Parse user input as a deal number: trimmed, digits-only, within range.
+ * Returns the integer, or null when anything is off (empty, non-numeric,
+ * fractional, out of range).
+ */
+export function parseDealNumber(input: string): number | null {
+  const trimmed = input.trim()
+  if (!/^\d+$/.test(trimmed)) return null
+  const n = Number(trimmed)
+  if (n < DEAL_MIN || n > DEAL_MAX) return null
+  return n
+}
+
 /** The current world: the dealt layout folded through every logged action. */
 export function worldFor(state: GameState): World {
   return replay(klondikeDraw1.deal(state.seed), state.moves.flat())

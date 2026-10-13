@@ -15,10 +15,14 @@ import { klondikeDraw1 as game } from './definition'
 import {
   applyPlayerMove,
   clearGame,
+  DEAL_MAX,
+  DEAL_MIN,
   initialState,
   isWonState,
   loadGame,
   moveGroup,
+  parseDealNumber,
+  randomDealNumber,
   safeFlights,
   saveGame,
   worldFor,
@@ -78,6 +82,35 @@ describe('initialState / worldFor', () => {
     expect(a).toEqual(b)
     expect(JSON.stringify(worldFor(a))).toBe(JSON.stringify(worldFor(b)))
     expect(JSON.stringify(worldFor(a))).toBe(JSON.stringify(game.deal('determinism')))
+  })
+})
+
+// --- deal numbers --------------------------------------------------------------
+
+describe('randomDealNumber', () => {
+  it('500 draws: all integers within [DEAL_MIN, DEAL_MAX]', () => {
+    for (let i = 0; i < 500; i++) {
+      const n = randomDealNumber()
+      expect(Number.isInteger(n)).toBe(true)
+      expect(n).toBeGreaterThanOrEqual(DEAL_MIN)
+      expect(n).toBeLessThanOrEqual(DEAL_MAX)
+    }
+  })
+})
+
+describe('parseDealNumber', () => {
+  it('accepts trimmed integers within range', () => {
+    expect(parseDealNumber('1')).toBe(DEAL_MIN)
+    expect(parseDealNumber(' 42 ')).toBe(42)
+    expect(parseDealNumber('1000000')).toBe(DEAL_MAX)
+  })
+
+  it('rejects empty, non-numeric, fractional, and out-of-range input with null', () => {
+    expect(parseDealNumber('')).toBeNull()
+    expect(parseDealNumber('abc')).toBeNull()
+    expect(parseDealNumber('1.5')).toBeNull()
+    expect(parseDealNumber('0')).toBeNull()
+    expect(parseDealNumber('1000001')).toBeNull()
   })
 })
 

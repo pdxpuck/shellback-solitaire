@@ -7,8 +7,12 @@
  * moveGroup (rule actions + its safe flights when the settings autoFly
  * toggle is on) — which is exactly one undo group. The board is placed from
  * klondikeDraw1.layout on a 7-column CSS grid.
+ *
+ * Every deal carries a game # (the seed, 1..1,000,000): the toolbar shows it
+ * (or "Practice deal" for legacy string seeds) and the "Play #" input
+ * replays any deal exactly by number.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
 import type { Action, PileId } from 'deckhand/engine'
 import type { LayoutHint } from 'deckhand/contract'
@@ -22,6 +26,8 @@ import {
   isWonState,
   loadGame,
   moveGroup,
+  parseDealNumber,
+  randomDealNumber,
   saveGame,
   worldFor,
   type GameState,
@@ -54,7 +60,15 @@ const FOUNDATION_GLYPHS: Partial<Record<PileId, string>> = {
 /** Pile id → role, from the game definition's pile topology. */
 const ROLES = new Map(klondikeDraw1.piles.map((pile) => [pile.id, pile.role]))
 
-const randomSeed = (): string => Math.random().toString(36).slice(2)
+/**
+ * The deal # for a seed, when the seed is numeric: Number() parses it and
+ * round-trips back to the exact same string. Legacy seeds (arbitrary
+ * strings) yield null and render as a "Practice deal".
+ */
+function dealNumberOf(seed: string): number | null {
+  const n = Number(seed)
+  return Number.isInteger(n) && String(n) === seed ? n : null
+}
 
 /** Fan offset for a pile of `count` cards, compressing toward the ~70vh cap. */
 function fanOffset(count: number, cardHeight: number): number {
@@ -92,12 +106,19 @@ function groupMoves(moves: readonly Action[]): readonly MoveGroup[] {
 
 function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
   // A fresh visit resumes the saved game; none/corrupt → a fresh random deal.
-  const [state, setState] = useState<GameState>(() => loadGame() ?? initialState(randomSeed()))
+  const [state, setState] = useState<GameState>(() =>
+    loadGame() ?? initialState(String(randomDealNumber())),
+  )
   /** The selected run: source pile + how many cards (from the top) move. */
   const [selected, setSelected] = useState<{ pileId: PileId; count: number } | null>(null)
+  /** Deal-jump input: the typed number + whether the last parse was invalid. */
+  const [dealInput, setDealInput] = useState('')
+  const [dealInvalid, setDealInvalid] = useState(false)
+  const dealInvalidTimer = useRef<number | null>(null)
 
   const world = worldFor(state)
   const won = isWonState(state)
+  const dealNumber = dealNumberOf(state.seed)
   const groups = groupMoves(klondikeDraw1.legalMoves(world))
 
   const cardHeight = Math.round(CARD_WIDTH * theme.ratio)
@@ -116,6 +137,14 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
   useEffect(() => {
     if (won) clearGame()
   }, [won])
+
+  // Clear a pending invalid-feedback timer on unmount.
+  useEffect(
+    () => () => {
+      if (dealInvalidTimer.current !== null) window.clearTimeout(dealInvalidTimer.current)
+    },
+    [],
+  )
 
   const deselect = () => setSelected(null)
 
@@ -147,10 +176,30 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
   }
 
   const newDeal = () => {
-    const fresh = initialState(randomSeed())
+    const fresh = initialState(String(randomDealNumber()))
     setState(fresh)
     saveGame(fresh)
     setSelected(null)
+  }
+
+  /** Jump to the deal # typed in the toolbar; null → brief invalid feedback. */
+  const playDeal = () => {
+    const n = parseDealNumber(dealInput)
+    if (dealInvalidTimer.current !== null) {
+      window.clearTimeout(dealInvalidTimer.current)
+      dealInvalidTimer.current = null
+    }
+    if (n === null) {
+      setDealInvalid(true)
+      dealInvalidTimer.current = window.setTimeout(() => setDealInvalid(false), 1600)
+      return
+    }
+    setDealInvalid(false)
+    const fresh = initialState(String(n))
+    setState(fresh)
+    saveGame(fresh)
+    setSelected(null)
+    setDealInput('')
   }
 
   const undo = () => {
@@ -275,6 +324,32 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
           <button type="button" className="secondary-btn" onClick={newDeal}>
             New deal
           </button>
+          <span className="deal-jump">
+            <input
+              type="text"
+              inputMode="numeric"
+              aria-label="Deal number"
+              placeholder="Deal #"
+              value={dealInput}
+              aria-invalid={dealInvalid}
+              onChange={(e) => {
+                setDealInput(e.target.value)
+                setDealInvalid(false)
+              }}
+              style={{
+                width: 84,
+                padding: '4px 8px',
+                border: dealInvalid ? '1px solid #a03030' : '1px solid #999',
+                borderRadius: 6,
+                font: 'inherit',
+                background: '#fff',
+                color: '#1a1a1a',
+              }}
+            />
+            <button type="button" className="secondary-btn" onClick={playDeal}>
+              Play #
+            </button>
+          </span>
           <button
             type="button"
             className="secondary-btn"
@@ -290,6 +365,9 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
             Back to main
           </button>
           <span className="move-count">
+            {dealNumber !== null ? `Game #${dealNumber}` : 'Practice deal'}
+          </span>
+          <span className="move-count">
             Moves: {state.moves.length}
           </span>
         </div>
@@ -302,7 +380,11 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
       {won && (
         <div className="win-overlay">
           <div className="win-banner">
-            <p>🎉 You won in {state.moves.length} moves!</p>
+            <p>
+              {dealNumber !== null
+                ? `🎉 You won game #${dealNumber} in ${state.moves.length} moves!`
+                : `🎉 You won in ${state.moves.length} moves!`}
+            </p>
             <button type="button" className="primary-btn" onClick={newDeal}>
               New deal
             </button>

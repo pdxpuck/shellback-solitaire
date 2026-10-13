@@ -57,6 +57,14 @@ collection app from day one — games are added as modules, no throwaway test ap
   safe auto-fly is a SETTINGS TOGGLE (default on) — off = manual foundations only.
 - Hint remains a stub post-C2.
 
+### Deal numbers (2026-10-13, v0.3.2)
+- Every deal carries an integer game # (1..1,000,000) — it IS the seed. Shown in the game
+  toolbar + win banner; "Play #" replays any deal exactly (repro + beatable-record
+  keeping, FreeCell-style).
+- Future (logged, not scheduled): "deal me a winnable hand" — needs a Klondike solver.
+  Unlike FreeCell (famous known-unwinnable lists), Klondike has no canonical lookup
+  lists; studies put draw-1 solvability around 80-90% with perfect play.
+
 ## Game contract (pointer)
 The six-part contract lives in deckhand (see deckhand/SCOPING_NOTES.md): deck spec →
 pile topology → move validator → auto-move policy → win/loss detector → layout hints.
