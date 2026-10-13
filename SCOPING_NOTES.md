@@ -34,6 +34,19 @@ collection app from day one — games are added as modules, no throwaway test ap
 | C3 | **Canfield** + contract validation | user plays it |
 | C4+ | new games = new modules; stats/undo/persistence polish; wraps later | per feature |
 
+## C1 decisions (2026-10-13)
+- **Game metadata** (family, winnability buckets, status, summary) lives collection-side
+  in src/games/registry.ts for C1; migrates into deckhand's game-contract during C2
+  when the contract finalizes. Family taxonomy: klondike/canfield/spider/golf/
+  pyramid/freecell/yukon/other (extensible). Winnability buckets: very-low/low/
+  moderate/high/very-high.
+- **Settings** = theme selection only, persisted to localStorage ('shellback.settings.v1',
+  validated on load). Win/loss stats DEFERRED — they imply the persistence decision (D6),
+  which stays open until C2.
+- **In-game toolbar** skeleton: New deal / Undo / Hint (disabled placeholders) + Back to
+  main (functional). Klondike's "Preview" reaches the skeleton; full wiring at C2.
+- Framework-check strip relocated from landing page into GameView placeholder.
+
 ## Game contract (pointer)
 The six-part contract lives in deckhand (see deckhand/SCOPING_NOTES.md): deck spec →
 pile topology → move validator → auto-move policy → win/loss detector → layout hints.

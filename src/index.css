@@ -1,4 +1,4 @@
-/* Minimal dark-on-light shell, matching deckhand's base styling. */
+/* Shell styling for the collection app, matching deckhand's base styling. */
 
 body {
   margin: 0;
@@ -9,20 +9,81 @@ body {
 
 .shell {
   padding: 16px 24px 48px;
+  max-width: 960px;
 }
+
+/* ---- header row (shared by home / settings / game views) ---- */
+
+.home-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.home-header h1 {
+  margin: 0;
+  margin-right: auto;
+  font-size: 1.5rem;
+}
+
+/* ---- buttons ---- */
+
+.primary-btn,
+.secondary-btn {
+  padding: 4px 12px;
+  border: 1px solid #999;
+  border-radius: 6px;
+  background: #fff;
+  color: #1a1a1a;
+  cursor: pointer;
+  font: inherit;
+}
+
+.primary-btn {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.primary-btn:hover {
+  background: #1d4ed8;
+}
+
+.secondary-btn:hover {
+  background: #eee;
+}
+
+.secondary-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.secondary-btn:disabled:hover {
+  background: #fff;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- home: game grid ---- */
 
 .games {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 12px;
   margin: 16px 0;
-  max-width: 640px;
 }
 
 .game-tile {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 6px;
   padding: 16px;
   border: 1px solid #999;
   border-radius: 8px;
@@ -30,21 +91,148 @@ body {
   color: #1a1a1a;
   font: inherit;
   text-align: left;
+  cursor: pointer;
 }
 
-.game-tile:disabled {
-  cursor: default;
-  opacity: 0.75;
+.game-tile:hover {
+  border-color: #555;
+}
+
+.game-tile.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px #bfdbfe;
 }
 
 .game-title {
   font-weight: 600;
+  font-size: 1.05rem;
 }
 
-.game-status {
+.game-family {
   color: #555;
   font-size: 0.85rem;
 }
+
+/* ---- badges (status + winnability color coding) ---- */
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.status-available {
+  background: #e6f4ea;
+  color: #1e7b34;
+}
+
+.status-development {
+  background: #fff4d5;
+  color: #8a6100;
+}
+
+.status-planned {
+  background: #ececec;
+  color: #555;
+}
+
+.winnability-high {
+  background: #e6f4ea;
+  color: #1e7b34;
+}
+
+.winnability-moderate {
+  background: #fff4d5;
+  color: #8a6100;
+}
+
+.winnability-low {
+  background: #fdeaea;
+  color: #a03030;
+}
+
+/* ---- home: summary panel ---- */
+
+.game-summary {
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px solid #999;
+  border-radius: 8px;
+  background: #fff;
+  max-width: 560px;
+}
+
+.game-summary h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.summary-text {
+  margin: 0 0 8px;
+}
+
+.summary-meta {
+  margin: 0 0 12px;
+  color: #555;
+  font-size: 0.85rem;
+}
+
+/* ---- settings ---- */
+
+.theme-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  max-width: 480px;
+}
+
+.theme-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #999;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.theme-option.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px #bfdbfe;
+}
+
+.theme-option input {
+  grid-row: span 2;
+}
+
+.theme-label {
+  font-weight: 600;
+}
+
+.theme-details {
+  color: #555;
+  font-size: 0.8rem;
+}
+
+.settings-note {
+  color: #555;
+  font-size: 0.9rem;
+}
+
+/* ---- game view ---- */
+
+.game-note {
+  color: #555;
+  font-size: 0.9rem;
+  margin: 8px 0 0;
+}
+
+/* ---- framework-check strip (placeholder table in GameView) ---- */
 
 .check-section {
   margin-top: 32px;
@@ -64,28 +252,11 @@ body {
 }
 
 .check-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
   margin: 12px 0;
 }
 
-.check-btn {
-  padding: 4px 12px;
-  border: 1px solid #999;
-  border-radius: 6px;
-  background: #fff;
-  color: #1a1a1a;
-  cursor: pointer;
-  font: inherit;
-}
-
-.check-btn:hover {
-  background: #eee;
-}
-
 .deal-result {
-  font-size: 0.9rem;
-  margin: 0;
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: #555;
 }

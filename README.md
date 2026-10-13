@@ -36,3 +36,5 @@ under bundler resolution (upstream fix pending in deckhand).
 `public/cards/byron/` is a **real copy** of deckhand's byron theme assets,
 duplicated per-consumer by design — deckhand ships no assets. License and
 credits: [public/cards/byron/LICENSE.md](./public/cards/byron/LICENSE.md).
+
+C1 (v0.2.0) delivers the collection shell — landing page with the game catalog (metadata + summaries), theme settings, and the in-game screen skeleton; version convention is phase Cn → 0.n.x, same as deckhand's phase convention.
