@@ -45,6 +45,7 @@ function App() {
         <GameView
           meta={getGame(view.gameId)}
           theme={theme}
+          autoFly={settings.autoFly}
           onBack={() => setView({ kind: 'home' })}
         />
       )}

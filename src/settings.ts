@@ -1,30 +1,35 @@
 /**
- * App settings — C1 scope is theme selection only, persisted to localStorage.
- * Win/loss stats are deliberately deferred: they imply the persistence
- * decision (D6), which stays open until C2 (see SCOPING_NOTES.md).
+ * App settings, persisted to localStorage. C1 scope was theme selection;
+ * C2 adds autoFly — safe cards fly to the foundations automatically (see
+ * GameView / moveGroup). Win/loss stats are deliberately deferred: they
+ * imply the persistence decision (D6), which stays open until C2
+ * (see SCOPING_NOTES.md).
  */
 import { DEFAULT_THEME_ID, getTheme } from 'deckhand/renderer'
 
 export interface AppSettings {
   themeId: string
+  /** Safe auto-fly to foundations on (true, default) or manual-only (false). */
+  autoFly: boolean
 }
 
-export const DEFAULT_SETTINGS: AppSettings = { themeId: DEFAULT_THEME_ID }
+export const DEFAULT_SETTINGS: AppSettings = { themeId: DEFAULT_THEME_ID, autoFly: true }
 
 const STORAGE_KEY = 'shellback.settings.v1'
 
 /**
  * Validate parsed-JSON-shaped input into AppSettings. Pure — no storage
  * access — so it is testable without jsdom. Anything that is not an object
- * carrying a known theme id falls back to the defaults.
+ * carrying a known theme id falls back to the defaults; a non-boolean
+ * autoFly falls back to the autoFly default while a valid theme id is kept.
  */
 export function validateSettings(raw: unknown): AppSettings {
   if (typeof raw !== 'object' || raw === null) return { ...DEFAULT_SETTINGS }
-  const themeId = (raw as { themeId?: unknown }).themeId
+  const { themeId, autoFly } = raw as { themeId?: unknown; autoFly?: unknown }
   if (typeof themeId === 'string') {
     try {
       getTheme(themeId)
-      return { themeId }
+      return { themeId, autoFly: typeof autoFly === 'boolean' ? autoFly : DEFAULT_SETTINGS.autoFly }
     } catch {
       // Unknown theme id → default below.
     }

@@ -47,6 +47,16 @@ collection app from day one — games are added as modules, no throwaway test ap
   main (functional). Klondike's "Preview" reaches the skeleton; full wiring at C2.
 - Framework-check strip relocated from landing page into GameView placeholder.
 
+### C2 part 2: board UI (2026-10-13, v0.3.1)
+- Click-click: select run/pile -> legal targets highlight -> click target. Stock click = draw;
+  empty-stock click = recycle. One click = ONE undo group (rule actions + that click's
+  safe-flight batch).
+- Saves = {seed, moves} in localStorage ('shellback.klondike-draw1.save.v1'); corrupt or
+  rule-breaking saves discarded on load. Win clears the save; win/loss stats still deferred (D6).
+- USER ADDITIONS: visible version string (Settings + home footer, __APP_VERSION__ define);
+  safe auto-fly is a SETTINGS TOGGLE (default on) — off = manual foundations only.
+- Hint remains a stub post-C2.
+
 ## Game contract (pointer)
 The six-part contract lives in deckhand (see deckhand/SCOPING_NOTES.md): deck spec →
 pile topology → move validator → auto-move policy → win/loss detector → layout hints.

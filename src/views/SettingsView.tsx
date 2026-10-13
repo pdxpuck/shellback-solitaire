@@ -1,7 +1,8 @@
 /**
- * SettingsView — C1 scope: card-theme selection only, persisted via
- * ../settings (loadSettings/saveSettings). Win/loss stats: deliberately
- * absent — no placeholder.
+ * SettingsView — card-theme selection (C1) + gameplay settings (C2:
+ * auto-fly toggle), persisted via ../settings (loadSettings/saveSettings).
+ * Footer shows the app version (injected as __APP_VERSION__ by Vite).
+ * Win/loss stats: deliberately absent — no placeholder.
  */
 import { THEMES } from 'deckhand/renderer'
 import type { AppSettings } from '../settings'
@@ -46,6 +47,28 @@ function SettingsView({ settings, onChange, onBack }: SettingsViewProps) {
         </div>
         <p className="settings-note">More settings arrive with the games.</p>
       </section>
+
+      <section aria-label="Gameplay">
+        <h2>Gameplay</h2>
+        <div className="setting-row">
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={settings.autoFly}
+              onChange={(e) => onChange({ ...settings, autoFly: e.target.checked })}
+            />
+            <span className="switch-slider" />
+          </label>
+          <div className="setting-text">
+            <span className="setting-label">Auto-complete to foundations</span>
+            <span className="setting-hint">Safe cards fly to the foundations automatically.</span>
+          </div>
+        </div>
+      </section>
+
+      <footer className="version-footer">
+        Shellback Solitaire Collection v{__APP_VERSION__}
+      </footer>
     </>
   )
 }

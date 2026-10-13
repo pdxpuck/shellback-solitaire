@@ -38,3 +38,5 @@ duplicated per-consumer by design — deckhand ships no assets. License and
 credits: [public/cards/byron/LICENSE.md](./public/cards/byron/LICENSE.md).
 
 C1 (v0.2.0) delivers the collection shell — landing page with the game catalog (metadata + summaries), theme settings, and the in-game screen skeleton; version convention is phase Cn → 0.n.x, same as deckhand's phase convention.
+
+Klondike (Draw-1) playable since v0.3.1.

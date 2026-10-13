@@ -79,6 +79,10 @@ function HomeView({ onOpenSettings, onPlay }: HomeViewProps) {
           )}
         </section>
       )}
+
+      <footer className="version-footer">
+        Shellback Solitaire Collection v{__APP_VERSION__}
+      </footer>
     </>
   )
 }
