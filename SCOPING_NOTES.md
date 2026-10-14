@@ -69,3 +69,13 @@ collection app from day one — games are added as modules, no throwaway test ap
 The six-part contract lives in deckhand (see deckhand/SCOPING_NOTES.md): deck spec →
 pile topology → move validator → auto-move policy → win/loss detector → layout hints.
 Klondike (C2) is its first real implementation; expect the contract to churn.
+
+### C2 play gate verdict (2026-10-13, user)
+- **PASSED with UI feedback** — Klondike Draw-1 playable end-to-end; rules sound.
+- **Auto-fly animation needed:** safe-fly moves happen at machine speed and are easy
+  to miss — cards should visibly FLOAT to their destination (~200-300 ms per card,
+  sequenced, not simultaneous). Top of the C3 polish list.
+- **Interaction model re-opened for expansion:** click-click works but may not be the
+  final model — add double-click (send to foundation) and/or drag-and-drop as
+  additional interaction modes. Click-click remains supported.
+- Deal numbers + Play-# replay + settings (theme, auto-fly) all verified in play.
