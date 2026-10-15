@@ -125,3 +125,22 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   globally across the board; any pile deeper than ~6 cards painted above the
   z-5 flight layer. Fix: .pile-slot gets isolation: isolate — card z becomes
   pile-local and can no longer race the flight layer.
+
+### C3 batch C: drag-and-drop (2026-10-15, v0.3.9)
+- First deckhand useDrag consumer (0.4.2, click-compatible: onDragStart fires on EVERY
+  pointerdown, so the click/drag threshold is consumer territory) — a 6px press threshold
+  gates activation; an unactivated press stays an ordinary click (native click/dblclick
+  flows run unchanged).
+- Per-card bindings: face-up tableau fan-cards + the waste/foundation TOP card only;
+  stock and face-down cards get none. bindings' touch-action:none is per-card — the board
+  itself keeps touch-scrolling.
+- The ghost shows the WHOLE run (12px fan) in a fixed z-6 layer (above flights, below the
+  win banner) while the originals hide via the hiddenCards union; pointer moves position it
+  imperatively via a ghost ref — no setState per move.
+- Drop hit-test = deckhand withinBounds over [data-pile-id] slots, source skipped (drop
+  home = quiet cancel); the legal group is found exactly like click-drop → commit with
+  { animate: false } (the drag WAS the animation — the ghost unmounts into the landed
+  board); illegal/nowhere → 150ms ease snap-back (transitionend + 160ms timeout fallback;
+  presses ignored during the glide).
+- Activated-drag ends swallow the trailing browser click (dragJustEnded guard at the top of
+  every card onClick); undo / new deal / play # cancel the drag alongside cancelFlights.

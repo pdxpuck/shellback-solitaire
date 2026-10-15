@@ -456,3 +456,38 @@ body {
     transform: translate(var(--dx), var(--dy));
   }
 }
+
+/* ---- game view: drag ghost (C3) ---- */
+
+/* Fixed layer hosting the dragged run's ghost: pointer-transparent, above
+   the flight layer (z-5), below the win overlay (z-10). */
+
+.drag-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* The dragged run, planted at the grabbed card's measured rect and
+   translated under the pointer imperatively — no transition while it
+   follows; the transition belongs to snap-back only. */
+
+.drag-ghost {
+  position: fixed;
+  will-change: transform;
+}
+
+/* Illegal drop: the ghost glides home over 150ms; transitionend (or a
+   160ms fallback timer) clears the drag. */
+
+.drag-ghost.snapping {
+  transition: transform 150ms ease;
+}
+
+/* One card of the dragged run, stacked at a 12px fan offset. */
+
+.drag-card {
+  position: absolute;
+  left: 0;
+}

@@ -6,7 +6,11 @@
  * clicked card/run to the first legal foundation move, else to its unique
  * legal destination (an ambiguous position moves nothing; the stock keeps
  * its exclusive click semantics). A stock click draws; an empty-stock click
- * (waste nonempty) recycles the waste; a click elsewhere deselects. Every
+ * (waste nonempty) recycles the waste; a click elsewhere deselects.
+ * Drag-and-drop (C3): pressing a face-up card and moving past a 6px threshold
+ * drags its whole run as a ghost — a legal drop commits WITHOUT flight
+ * animation (the drag was the animation), an illegal drop glides home, and a
+ * press that never crosses the threshold stays an ordinary click. Every
  * player click commits as ONE
  * moveGroup (rule actions + its safe flights when the settings autoFly
  * toggle is on) — which is exactly one undo group. Flight pacing is a user
@@ -31,11 +35,15 @@
  * was opened from (the game — state survives via the per-commit save).
  */
 import { useEffect, useRef, useState } from 'react'
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react'
 import type { Action, PileCard, PileId } from 'deckhand/engine'
 import type { LayoutHint } from 'deckhand/contract'
-import type { CardTheme } from 'deckhand/renderer'
-import { CardView } from 'deckhand/renderer'
+import type { CardTheme, Point } from 'deckhand/renderer'
+import { CardView, useDrag, withinBounds } from 'deckhand/renderer'
 import type { GameMeta } from '../games/registry'
 import type { FlightSpeed } from '../settings'
 import { klondikeDraw1 } from '../games/klondike/definition'
@@ -73,6 +81,13 @@ const FAN_RATIO = 0.28
 const COLUMN_HEIGHT_LIMIT = 0.7
 /** Compressed piles never squeeze tighter than this many px per card. */
 const MIN_FAN_OFFSET = 16
+
+/** Press-to-drag threshold: a press moving beyond this many px is a drag. */
+const DRAG_THRESHOLD_PX = 6
+/** Fan offset between consecutive cards in the dragged run's ghost. */
+const DRAG_FAN_OFFSET = 12
+/** Snap-back fallback: clear the drag if transitionend never fires. */
+const SNAP_BACK_MS = 160
 
 /** Per-speed flight timing: one leg's duration + the start-to-start cadence. */
 const FLIGHT_TIMING: Record<FlightSpeed, { leg: number; step: number }> = {
@@ -132,6 +147,22 @@ interface FlightsState {
   readonly settled: number
 }
 
+/** An activated drag: the grabbed run + the ghost's origin geometry. */
+interface DragState {
+  readonly cardId: string
+  readonly pileId: PileId
+  /** Cards in the dragged run (tableau: everything from the grab down). */
+  readonly count: number
+  /** Pointer position at activation — the ghost transform's origin. */
+  readonly startX: number
+  readonly startY: number
+  /** The grabbed card's measured rect — where the ghost mounts. */
+  readonly left: number
+  readonly top: number
+  /** True while the ghost glides back home after an unresolved drop. */
+  readonly snapBack: boolean
+}
+
 function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }: GameViewProps) {
   // A fresh visit resumes the saved game; none/corrupt → a fresh random deal.
   const [state, setState] = useState<GameState>(() =>
@@ -151,6 +182,23 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
   const flightTimers = useRef<number[]>([])
   /** Monotonic overlay generation; captured by each settle timer. */
   const flightsGen = useRef(0)
+  /** The activated drag (ghost + run), or null — set only past the threshold. */
+  const [drag, setDrag] = useState<DragState | null>(null)
+  /** Pointer origin of the press — a ref, NOT state: pointerdown fires on
+   * every click, and only the 6px threshold turns a press into a drag. */
+  const dragOrigin = useRef<Point | null>(null)
+  /** The pressed card, read off the wrapper's data attributes at pointerdown. */
+  const dragPress = useRef<{ cardId: string; pileId: PileId } | null>(null)
+  /** True once the press crossed the threshold and became a real drag. */
+  const dragActivated = useRef(false)
+  /** Set when an ACTIVATED drag ends; swallows the trailing browser click. */
+  const dragJustEnded = useRef(false)
+  /** True during the snap-back glide — further presses are ignored. */
+  const dragSnapping = useRef(false)
+  /** Fallback timer clearing the snap-back if transitionend never fires. */
+  const snapTimer = useRef<number | null>(null)
+  /** The ghost element — moves are positioned imperatively (no setState). */
+  const ghostRef = useRef<HTMLDivElement | null>(null)
 
   const world = worldFor(state)
   const won = isWonState(state)
@@ -179,6 +227,14 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
     }
   }
 
+  /** The dragged run's cards (render-time world) — the ghost's contents. */
+  const dragRun: readonly PileCard[] =
+    drag === null ? [] : world.piles[drag.pileId].cards.slice(-drag.count)
+  // An activated drag hides its whole run on the board: it lives in the ghost.
+  if (drag !== null) {
+    for (const pc of dragRun) hiddenCards.add(pc.card.id)
+  }
+
   /** Flight ghost art, looked up from the FINAL world (id → card + face-up). */
   const flyingCardById = new Map<string, PileCard>()
   if (flights !== null) {
@@ -192,11 +248,13 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
     if (won) clearGame()
   }, [won])
 
-  // Clear pending timers (invalid-feedback + flight settle chain) on unmount.
+  // Clear pending timers (invalid-feedback + flight settle chain + drag
+  // snap-back fallback) on unmount.
   useEffect(
     () => () => {
       if (dealInvalidTimer.current !== null) window.clearTimeout(dealInvalidTimer.current)
       for (const timer of flightTimers.current) window.clearTimeout(timer)
+      if (snapTimer.current !== null) window.clearTimeout(snapTimer.current)
     },
     [],
   )
@@ -208,6 +266,34 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
     for (const timer of flightTimers.current) window.clearTimeout(timer)
     flightTimers.current = []
     setFlights(null)
+  }
+
+  /** Clear the drag state; dragJustEnded survives — the trailing browser
+   * click of a just-ended drag still needs swallowing. */
+  const clearDrag = () => {
+    if (snapTimer.current !== null) {
+      window.clearTimeout(snapTimer.current)
+      snapTimer.current = null
+    }
+    dragSnapping.current = false
+    setDrag(null)
+  }
+
+  /** Cancel paths (undo / new deal / deal jump): drop the drag entirely. */
+  const cancelDrag = () => {
+    dragJustEnded.current = false
+    dragOrigin.current = null
+    dragPress.current = null
+    dragActivated.current = false
+    clearDrag()
+  }
+
+  /** Unresolved drop: glide the ghost home (CSS), then fully clear the drag
+   * on transitionend — or via the fallback timer if the event never fires. */
+  const beginSnapBack = () => {
+    dragSnapping.current = true
+    setDrag((current) => (current === null ? null : { ...current, snapBack: true }))
+    snapTimer.current = window.setTimeout(clearDrag, SNAP_BACK_MS)
   }
 
   /**
@@ -332,11 +418,13 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
   }
 
   /** Execute one grouped legal move as a single player click. */
-  const commit = (actions: readonly Action[]) => {
+  const commit = (actions: readonly Action[], opts?: { animate?: boolean }) => {
     const next = moveGroup(state, actions, { autoFly })
     // Animate the WHOLE committed group (rule actions + moveGroup's safe
     // flights) against the render-time world, then apply the state instantly.
-    startFlights(next.moves[next.moves.length - 1])
+    // A drag-drop commit passes { animate: false } — the drag WAS the
+    // animation; the ghost unmounts straight into the landed board.
+    if (opts?.animate !== false) startFlights(next.moves[next.moves.length - 1])
     setState(next)
     saveGame(next)
     setSelected(null)
@@ -372,6 +460,7 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
 
   const newDeal = () => {
     cancelFlights()
+    cancelDrag()
     const fresh = initialState(String(randomDealNumber()))
     setState(fresh)
     saveGame(fresh)
@@ -392,6 +481,7 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
     }
     setDealInvalid(false)
     cancelFlights()
+    cancelDrag()
     const fresh = initialState(String(n))
     setState(fresh)
     saveGame(fresh)
@@ -401,11 +491,130 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
 
   const undo = () => {
     cancelFlights()
+    cancelDrag()
     const next = { ...state, moves: state.moves.slice(0, -1) }
     setState(next)
     saveGame(next)
     setSelected(null)
   }
+
+  // ---- drag-and-drop (C3) --------------------------------------------------
+  // ONE useDrag instance serves every draggable card: bindings carry only
+  // pointer plumbing, and card identity is read off the pressed wrapper's
+  // data attributes (data-card-id, closest [data-pile-id]). Click vs drag is
+  // OUR job: onDragStart fires on every pointerdown, so the origin + pressed
+  // card live in refs, and only a move past the 6px threshold activates a
+  // real drag (one setState to mount the ghost; every further move positions
+  // it imperatively — no setState per move).
+
+  /** Threshold crossed: mount the ghost via one setState, planted at the
+   * grabbed card's measured rect. The ghost mounts at translate(0,0) —
+   * exactly the card's spot — and the next pointermove positions it. */
+  const activateDrag = (point: Point, e: ReactPointerEvent<HTMLElement>) => {
+    const press = dragPress.current
+    if (press === null) return
+    const pile = world.piles[press.pileId]
+    const idx = pile.cards.findIndex((pc) => pc.card.id === press.cardId)
+    const grabbed = idx >= 0 ? pile.cards[idx] : null
+    if (grabbed === null || !grabbed.faceUp) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    setDrag({
+      cardId: press.cardId,
+      pileId: press.pileId,
+      count: pile.cards.length - idx, // same run formula as click-select
+      startX: point.x,
+      startY: point.y,
+      left: rect.left,
+      top: rect.top,
+      snapBack: false,
+    })
+  }
+
+  /** pointerdown on a drag source: record origin + pressed card (refs). */
+  const handleDragStart = (point: Point, e: ReactPointerEvent<HTMLElement>) => {
+    if (dragSnapping.current) return // the snap-back glide ignores presses
+    dragJustEnded.current = false // a fresh press outlives any swallow window
+    const cardId = e.currentTarget.dataset.cardId
+    const pileEl = e.currentTarget.closest<HTMLElement>('[data-pile-id]')
+    const pileId = pileEl?.dataset.pileId
+    if (cardId === undefined || pileId === undefined) return
+    dragOrigin.current = point
+    dragPress.current = { cardId, pileId }
+    dragActivated.current = false
+  }
+
+  /** Ghost follow: imperative transform only — no setState per move. */
+  const handleDragMove = (point: Point, e: ReactPointerEvent<HTMLElement>) => {
+    const origin = dragOrigin.current
+    if (origin === null) return
+    if (!dragActivated.current) {
+      const dx = point.x - origin.x
+      const dy = point.y - origin.y
+      if (dx * dx + dy * dy <= DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) return
+      dragActivated.current = true
+      activateDrag(point, e)
+      return
+    }
+    const d = drag
+    const ghost = ghostRef.current
+    if (d !== null && ghost !== null) {
+      ghost.style.transform = `translate(${point.x - d.startX}px, ${point.y - d.startY}px)`
+    }
+  }
+
+  /** Drop resolution: hit-test the pile slots, commit the legal group
+   * without re-animating, else glide the ghost back home. */
+  const handleDragEnd = (point: Point) => {
+    dragOrigin.current = null
+    dragPress.current = null
+    const activated = dragActivated.current
+    dragActivated.current = false
+    if (!activated) return // never activated → ordinary click; onClick runs
+    dragJustEnded.current = true // swallow the trailing browser click
+    const d = drag
+    const board = boardRef.current
+    if (d === null || board === null) {
+      clearDrag()
+      return
+    }
+    // First slot containing the drop point wins (slots never overlap); the
+    // SOURCE pile is skipped — dropping home is a quiet cancel, no glide.
+    let targetId: string | null = null
+    for (const slot of board.querySelectorAll<HTMLElement>('[data-pile-id]')) {
+      const id = slot.dataset.pileId
+      if (id === undefined || id === d.pileId) continue
+      if (withinBounds(point, slot.getBoundingClientRect())) {
+        targetId = id
+        break
+      }
+    }
+    if (targetId !== null) {
+      const target = targetId
+      const group = groups.find(
+        (g) => g.move.from === d.pileId && g.move.count === d.count && g.move.to === target,
+      )
+      if (group !== undefined) {
+        clearDrag()
+        commit(group.actions, { animate: false })
+        return
+      }
+    }
+    beginSnapBack()
+  }
+
+  const dragHandle = useDrag({
+    onDragStart: handleDragStart,
+    onDragMove: handleDragMove,
+    onDragEnd: handleDragEnd,
+  })
+
+  // Snap-back: once the .snapping transition class is committed, glide the
+  // imperatively-positioned ghost back to its origin (translate(0, 0)).
+  useEffect(() => {
+    if (drag !== null && drag.snapBack && ghostRef.current !== null) {
+      ghostRef.current.style.transform = 'translate(0, 0)'
+    }
+  }, [drag])
 
   const cellStyle = (hint: LayoutHint, height: number): CSSProperties => ({
     gridColumn: hint.col + 1,
@@ -476,13 +685,19 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
                 `${selectedCount > 0 && i >= cards.length - selectedCount ? ' selected-run' : ''}` +
                 `${!isTarget && pc.faceUp ? ' selectable' : ''}`
               }
+              {...(pc.faceUp ? dragHandle.bindings : {})}
               style={{
+                ...(pc.faceUp ? dragHandle.bindings.style : {}),
                 top: i * offset,
                 zIndex: i,
                 ...(hiddenCards.has(pc.card.id) ? { visibility: 'hidden' as const } : {}),
               }}
               onClick={(e: ReactMouseEvent) => {
                 e.stopPropagation()
+                if (dragJustEnded.current) {
+                  dragJustEnded.current = false // swallow the click a drag emits
+                  return
+                }
                 if (isTarget) drop(hint.pileId)
                 else if (pc.faceUp) setSelected({ pileId: hint.pileId, count: cards.length - i })
               }}
@@ -512,32 +727,43 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
         onClick={isTarget ? () => drop(hint.pileId) : undefined}
       >
         {visibleIdx >= 0 ? (
-          cards.slice(visibleIdx).map((pc) => (
-            <div
-              key={pc.card.id}
-              data-card-id={pc.card.id}
-              className={
-                `fan-card${isTarget ? ' drop-target' : ''}` +
-                `${selectedTop ? ' selected-run' : ''}` +
-                `${!isTarget && pc.faceUp ? ' selectable' : ''}`
-              }
-              style={{
-                zIndex: 1,
-                ...(hiddenCards.has(pc.card.id) ? { visibility: 'hidden' as const } : {}),
-              }}
-              onClick={(e: ReactMouseEvent) => {
-                e.stopPropagation()
-                if (isTarget) drop(hint.pileId)
-                else if (pc.faceUp) setSelected({ pileId: hint.pileId, count: 1 })
-              }}
-              onDoubleClick={(e) => {
-                e.stopPropagation()
-                quickFly(hint.pileId, 1)
-              }}
-            >
-              <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
-            </div>
-          ))
+          cards.slice(visibleIdx).map((pc) => {
+            // Only the pile's actual top card drags — a still-flying (hidden)
+            // top gets bindings but is unhit-testable while invisible.
+            const draggable = top !== null && pc === top && top.faceUp
+            return (
+              <div
+                key={pc.card.id}
+                data-card-id={pc.card.id}
+                className={
+                  `fan-card${isTarget ? ' drop-target' : ''}` +
+                  `${selectedTop ? ' selected-run' : ''}` +
+                  `${!isTarget && pc.faceUp ? ' selectable' : ''}`
+                }
+                {...(draggable ? dragHandle.bindings : {})}
+                style={{
+                  ...(draggable ? dragHandle.bindings.style : {}),
+                  zIndex: 1,
+                  ...(hiddenCards.has(pc.card.id) ? { visibility: 'hidden' as const } : {}),
+                }}
+                onClick={(e: ReactMouseEvent) => {
+                  e.stopPropagation()
+                  if (dragJustEnded.current) {
+                    dragJustEnded.current = false // swallow the click a drag emits
+                    return
+                  }
+                  if (isTarget) drop(hint.pileId)
+                  else if (pc.faceUp) setSelected({ pileId: hint.pileId, count: 1 })
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  quickFly(hint.pileId, 1)
+                }}
+              >
+                <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
+              </div>
+            )
+          })
         ) : (
           role === 'foundation' && (
             <span className="slot-glyph" aria-hidden="true">
@@ -639,6 +865,28 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* The dragged run's ghost — its own fixed layer above the flight layer
+          (z-6) and below the win overlay; pointer-transparent, driven by the
+          pointer capture on the pressed card. Snap-back adds a glide class. */}
+      {drag !== null && (
+        <div className="drag-layer" aria-hidden="true">
+          <div
+            ref={ghostRef}
+            className={`drag-ghost${drag.snapBack ? ' snapping' : ''}`}
+            style={{ left: drag.left, top: drag.top, width: CARD_WIDTH }}
+            onTransitionEnd={(e) => {
+              if (e.target === e.currentTarget && e.propertyName === 'transform') clearDrag()
+            }}
+          >
+            {dragRun.map((pc, i) => (
+              <div key={pc.card.id} className="drag-card" style={{ top: i * DRAG_FAN_OFFSET }}>
+                <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
