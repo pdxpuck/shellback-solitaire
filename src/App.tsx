@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import type { CardTheme } from 'deckhand/renderer'
 import { getTheme } from 'deckhand/renderer'
+import { gameViewConfig } from './games/gameViews'
 import { getGame } from './games/registry'
 import { loadSettings, saveSettings } from './settings'
 import type { AppSettings } from './settings'
@@ -52,6 +53,7 @@ function App() {
       )}
       {view.kind === 'game' && (
         <GameView
+          config={gameViewConfig(view.gameId)}
           meta={getGame(view.gameId)}
           theme={theme}
           autoFly={settings.autoFly}

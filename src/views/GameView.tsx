@@ -1,13 +1,18 @@
 /**
- * GameView — the playable Klondike (Draw-1) screen. Two interaction modes
- * (C3): click-click — click a face-up tableau card to select its run (or a
+ * GameView — the playable game screen, fully game-agnostic: every
+ * rules-specific input arrives via the GameViewConfig prop (definition +
+ * session + presentation glue — see games/gameViews.ts), and the view never
+ * names a game. Two interaction modes
+ * (C3): click-click — click a face-up fan card to select its run (or a
  * waste/foundation top card to select it), legal destinations highlight,
  * click one to move — and double-click smart move, which quick-flies the
  * clicked card/run to the first legal foundation move, else to its LEFT-MOST
  * legal destination (ambiguity resolves left-most — lowest layout column,
  * ties → first group; the stock is never auto-chosen, so recycling stays a
- * deliberate stock click). A stock click draws; an empty-stock click
- * (waste nonempty) recycles the waste; a click elsewhere deselects.
+ * deliberate stock click). A stock click draws; an empty special slot click
+ * (the stock with the waste nonempty, or Canfield's empty reserve) commits
+ * the whole-pile flip-over INTO it (recycle / reserve refill); a click
+ * elsewhere deselects.
  * Drag-and-drop (C3): pressing a face-up card and moving past a 6px threshold
  * drags its whole run as a ghost — a legal drop commits WITHOUT flight
  * animation (the drag was the animation), an illegal drop glides home, and a
@@ -16,7 +21,7 @@
  * moveGroup (rule actions + its safe flights when the settings autoFly
  * toggle is on) — which is exactly one undo group. Flight pacing is a user
  * setting too (slow/med/fast, default med — see FLIGHT_TIMING). The board
- * is placed from klondikeDraw1.layout on a 7-column CSS grid.
+ * is placed from definition.layout on a CSS grid.
  *
  * Card flights (C3) are purely cosmetic: commit applies the final state
  * instantly and authoritatively, and a fixed-position overlay flies ONE
@@ -49,23 +54,13 @@ import type { CardTheme, Point } from 'deckhand/renderer'
 import { CardView, useDrag, withinBounds } from 'deckhand/renderer'
 import type { GameMeta } from '../games/registry'
 import type { FlightSpeed } from '../settings'
-import { klondikeDraw1 } from '../games/klondike/definition'
-import { groupMoves, quickMove } from '../games/klondike/interaction'
-import {
-  clearGame,
-  initialState,
-  isWonState,
-  loadGame,
-  moveGroup,
-  parseDealNumber,
-  randomDealNumber,
-  saveGame,
-  worldFor,
-  type GameState,
-} from '../games/klondike/play'
+import { groupMoves, quickMove } from '../games/gameViews'
+import type { GameViewConfig, GameState } from '../games/gameViews'
 import { flightPlan } from './flights'
 
 interface GameViewProps {
+  /** The per-game view config (definition + session + presentation glue). */
+  config: GameViewConfig
   meta: GameMeta
   theme: CardTheme
   onBack: () => void
@@ -106,20 +101,6 @@ const SLOWMO = Math.min(
   10,
   Math.max(1, Number(new URLSearchParams(window.location.search).get('slowmo') ?? '1') || 1),
 )
-
-/** Faint glyph on an empty foundation slot (presentation chrome only). */
-const FOUNDATION_GLYPHS: Partial<Record<PileId, string>> = {
-  'found-S': '♠',
-  'found-H': '♥',
-  'found-D': '♦',
-  'found-C': '♣',
-}
-
-/** Pile id → role, from the game definition's pile topology. */
-const ROLES = new Map(klondikeDraw1.piles.map((pile) => [pile.id, pile.role]))
-
-/** Pile id → layout column, from the game definition's layout hints. */
-const LAYOUT_COL = new Map(klondikeDraw1.layout.map((hint) => [hint.pileId, hint.col]))
 
 /**
  * The deal # for a seed, when the seed is numeric: Number() parses it and
@@ -181,7 +162,31 @@ interface DragState {
   readonly snapBack: boolean
 }
 
-function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }: GameViewProps) {
+function GameView({
+  config,
+  meta,
+  theme,
+  onBack,
+  autoFly,
+  flightSpeed,
+  onOpenSettings,
+}: GameViewProps) {
+  // The game-agnostic surface, destructured once: `definition` drives the
+  // board (pile topology, layout, legal moves), `session` drives play
+  // (replay, save/load, move groups). Every call site below is identical
+  // for every game.
+  const { definition } = config
+  const {
+    clearGame,
+    initialState,
+    isWonState,
+    loadGame,
+    moveGroup,
+    parseDealNumber,
+    randomDealNumber,
+    saveGame,
+    worldFor,
+  } = config.session
   // A fresh visit resumes the saved game; none/corrupt → a fresh random deal.
   const [state, setState] = useState<GameState>(() =>
     loadGame() ?? initialState(String(randomDealNumber())),
@@ -221,7 +226,13 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
   const world = worldFor(state)
   const won = isWonState(state)
   const dealNumber = dealNumberOf(state.seed)
-  const groups = groupMoves(klondikeDraw1.legalMoves(world))
+  const groups = groupMoves(definition.legalMoves(world))
+
+  /** Pile id → role, from the game definition's pile topology. */
+  const ROLES = new Map(definition.piles.map((pile) => [pile.id, pile.role]))
+
+  /** Pile id → layout column, from the game definition's layout hints. */
+  const LAYOUT_COL = new Map(definition.layout.map((hint) => [hint.pileId, hint.col]))
 
   const cardHeight = Math.round(CARD_WIDTH * theme.ratio)
   /** The active speed's flight timing (leg + cadence), scaled by the ?slowmo
@@ -261,6 +272,9 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
   /** The dragged run's cards (render-time world) — the ghost's contents. */
   const dragRun: readonly PileCard[] =
     drag === null ? [] : world.piles[drag.pileId].cards.slice(-drag.count)
+  /** True while dragging the reserve's top card — a reserve drag is always
+   *  exactly that card, and its face-up override carries into the ghost. */
+  const reserveDrag = drag !== null && ROLES.get(drag.pileId) === 'reserve'
   // An activated drag hides its whole run on the board: it lives in the ghost.
   if (drag !== null) {
     for (const pc of dragRun) hiddenCards.add(pc.card.id)
@@ -275,9 +289,11 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
   }
 
   // A win drops the save (win/loss stats stay deferred, D6) — idempotent.
+  // clearGame is the session's stable module function, so this still runs
+  // only on a won→(re)render transition.
   useEffect(() => {
     if (won) clearGame()
-  }, [won])
+  }, [won, clearGame])
 
   // Clear pending timers (invalid-feedback + flight settle chain + drag
   // snap-back fallback) on unmount.
@@ -483,14 +499,24 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
     if (group) commit(group.actions)
   }
 
-  const stockClick = () => {
-    const draw = groups.find((g) => g.move.from === 'stock')
+  /**
+   * The special whole-pile click, wired to the stock slot and the EMPTY
+   * reserve slot. A draw FROM the clicked pile wins when one exists (the
+   * stock deals); otherwise the whole-pile flip-over INTO the clicked pile
+   * commits — Klondike's waste→stock recycle and Canfield's waste→reserve
+   * refill are the same shape: one reverse move of the whole waste, face
+   * down. Both are deliberate clicks on the empty slot, never auto-chosen.
+   */
+  const specialClick = (pileId: PileId) => {
+    const draw = groups.find((g) => g.move.from === pileId)
     if (draw) {
       commit(draw.actions)
       return
     }
-    const recycle = groups.find((g) => g.move.from === 'waste' && g.move.to === 'stock')
-    if (recycle) commit(recycle.actions)
+    const refill = groups.find(
+      (g) => (g.move.from === 'waste' || g.move.from === 'stock') && g.move.to === pileId,
+    )
+    if (refill) commit(refill.actions)
   }
 
   /**
@@ -562,7 +588,14 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
     const pile = world.piles[press.pileId]
     const idx = pile.cards.findIndex((pc) => pc.card.id === press.cardId)
     const grabbed = idx >= 0 ? pile.cards[idx] : null
-    if (grabbed === null || !grabbed.faceUp) return
+    if (grabbed === null) return
+    // View-level face-up — exactly the bindings condition: the model's flag
+    // (still pre-reveal), plus the reserve's TOP card, which renders and
+    // plays face-up ALWAYS (real-Canfield look) and so drags like it looks.
+    const faceUp =
+      (grabbed.faceUp && !unrevealed(grabbed.card.id)) ||
+      (ROLES.get(press.pileId) === 'reserve' && idx === pile.cards.length - 1)
+    if (!faceUp) return
     const rect = e.currentTarget.getBoundingClientRect()
     setDrag({
       cardId: press.cardId,
@@ -675,7 +708,8 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
     const isTarget = targets.has(hint.pileId)
     const slotClass = `pile-slot${isTarget ? ' drop-target' : ''}`
 
-    // Stock: click = draw (cards) or recycle (empty stock + waste nonempty).
+    // Stock: click = draw (cards) or, when empty with the waste nonempty,
+    // the whole-pile flip-over recycle into the stock (specialClick).
     if (hint.pileId === 'stock') {
       const clickable = top !== null || world.piles.waste.cards.length > 0
       return (
@@ -684,7 +718,7 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
           data-pile-id={hint.pileId}
           className={`pile-slot${clickable ? ' clickable' : ''}`}
           style={cellStyle(hint, cardHeight)}
-          onClick={clickable ? stockClick : undefined}
+          onClick={clickable ? () => specialClick(hint.pileId) : undefined}
         >
           {top !== null && (
             <div
@@ -709,23 +743,33 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
 
     const role = ROLES.get(hint.pileId)
 
-    // Tableau: the full pile fans down; a face-up card selects the run beneath.
-    if (role === 'tableau') {
+    // Fan piles (hint.fan 'down' — the tableaux, plus Canfield's reserve):
+    // the full pile fans down; a face-up card selects the run beneath it.
+    // The reserve's TOP card renders face-up ALWAYS — the playable top of
+    // the (model-)face-down stack — and is the only reserve card that
+    // selects or drags; deeper cards stay face-down chrome. The empty
+    // reserve's slot click is its whole-pile refill (specialClick).
+    if (hint.fan === 'down') {
       const offset = fanOffset(cards.length, cardHeight)
       const height = cardHeight + (cards.length - 1) * offset
       const selectedCount = selected !== null && selected.pileId === hint.pileId ? selected.count : 0
+      const emptyReserveClick =
+        role === 'reserve' && cards.length === 0 ? () => specialClick(hint.pileId) : undefined
       return (
         <div
           key={hint.pileId}
           data-pile-id={hint.pileId}
           className={slotClass}
           style={cellStyle(hint, height)}
-          onClick={isTarget ? () => drop(hint.pileId) : undefined}
+          onClick={isTarget ? () => drop(hint.pileId) : emptyReserveClick}
         >
           {cards.map((pc, i) => {
             // A flip not yet revealed by its exposing flight's landing renders
             // face-down — not selectable, not a drag source, not click-select.
-            const faceUp = pc.faceUp && !unrevealed(pc.card.id)
+            // The reserve's top card overrides to face-up unconditionally.
+            const isTop = i === cards.length - 1
+            const faceUp =
+              (pc.faceUp && !unrevealed(pc.card.id)) || (role === 'reserve' && isTop)
             return (
               <div
                 key={pc.card.id}
@@ -825,7 +869,7 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
         ) : (
           role === 'foundation' && (
             <span className="slot-glyph" aria-hidden="true">
-              {FOUNDATION_GLYPHS[hint.pileId]}
+              {config.emptyFoundationGlyph(world, hint.pileId)}
             </span>
           )
         )}
@@ -894,7 +938,7 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
       </header>
 
       <section className="board" ref={boardRef} aria-label={`${meta.title} table`}>
-        {klondikeDraw1.layout.map(renderPile)}
+        {definition.layout.map(renderPile)}
       </section>
 
       {/* Cosmetic flight ghosts — one merged arc per card; clicks pass through. */}
@@ -942,7 +986,7 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
           >
             {dragRun.map((pc, i) => (
               <div key={pc.card.id} className="drag-card" style={{ top: i * DRAG_FAN_OFFSET }}>
-                <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
+                <CardView card={pc.card} faceUp={pc.faceUp || reserveDrag} theme={theme} width={CARD_WIDTH} />
               </div>
             ))}
           </div>

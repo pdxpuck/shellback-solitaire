@@ -46,7 +46,7 @@ export const REGISTRY: readonly GameMeta[] = [
     title: 'Canfield',
     family: 'canfield',
     winnability: 'low',
-    status: 'planned',
+    status: 'development',
     summary:
       'A tougher cousin: foundations build up from a randomly-drawn base card and wrap ' +
       'around, fed by a 13-card reserve. History says it was named after a casino — it plays like one.',

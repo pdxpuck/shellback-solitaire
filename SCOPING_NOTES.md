@@ -166,6 +166,7 @@ SW scoped to the base path so sibling Pages sites are unaffected.
 
 Canfield (C3 proper) next: rules digest captured at docs/CANFIELD_RULES.md (Wikipedia, 2026-10-15); expected deckhand contract churn listed there.
 CB2 (v0.4.0): canfield definition+play modules, logic-complete + tested (85→122 tests); registry still 'planned' — GameView generalization (CB3, v0.4.1) makes it Preview-able.
+CB3 (v0.4.1): GameView generalized via a gameViews.ts config map (per-game definition + play session + empty-foundation glyph; groupMoves/quickMove re-exported so view code has no per-game import paths); canfield live in Preview (registry → 'development'); reserve renders its top face-up ALWAYS (model may keep it face-down — real-Canfield look) and only the reserve top selects/drags; empty-slot special clicks generalized — specialClick(pileId) prefers a draw from the clicked pile, else commits the whole-pile flip-over into it (Klondike's waste→stock recycle, Canfield's waste→reserve refill).
 
 Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table presets setting → unlockable tables earned by wins (chains to win-stats/D6).
 
