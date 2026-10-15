@@ -133,11 +133,15 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   leg's settle timer fires (lift → land → THEN the reveal). An un-revealed card
   is also unselectable and undraggable (visually face-down = behaves face-down).
 
-### Deployment intent (user, 2026-10-15)
-After the current bug round: publish via GitHub Pages — the repo is already
-standalone, so an Actions push-to-deploy workflow fits. Motivation: testing on
-a real mobile device. Optional later: a solitaire.shellbackstudio.xyz subdomain
-(same DNS pattern as shellback-studio-site).
+### Deployment (implemented, v0.3.11 — user intent 2026-10-15)
+Published via GitHub Pages — the repo is standalone, so an Actions
+push-to-deploy workflow fits; motivation was testing on a real mobile device.
+Implemented as v0.3.11: `.github/workflows/deploy.yml` (build + ship on push
+to main), Vite `base` path `/shellback-solitaire/` (env-overridable:
+`BASE_PATH=/` for the optional-later solitaire.shellbackstudio.xyz subdomain,
+same DNS pattern as shellback-studio-site), and Pages enablement via gh api
+(build_type=workflow — done by the operator at deploy time). Live-URL
+verification happens post-push.
 
 ### C3 batch C: drag-and-drop (2026-10-15, v0.3.9)
 - First deckhand useDrag consumer (0.4.2, click-compatible: onDragStart fires on EVERY

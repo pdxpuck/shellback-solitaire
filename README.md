@@ -31,6 +31,16 @@ Imports use deckhand's **subpath exports** (`deckhand/engine`,
 `dist/index.d.ts` re-exports extensionlessly, which TypeScript can't follow
 under bundler resolution (upstream fix pending in deckhand).
 
+## Deployment
+
+Push to `main` triggers the GitHub Actions workflow
+([.github/workflows/deploy.yml](./.github/workflows/deploy.yml)): it builds
+the app and ships it to GitHub Pages at
+https://pdxpuck.github.io/shellback-solitaire/.
+
+The Vite `base` path is env-overridable — set `BASE_PATH=/` for a future
+custom domain (e.g. solitaire.shellbackstudio.xyz).
+
 ## Card art
 
 `public/cards/byron/` is a **real copy** of deckhand's byron theme assets,

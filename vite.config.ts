@@ -11,6 +11,9 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 
 // https://vite.dev/config/
 export default defineConfig({
+  // GitHub Pages project path. Overridable for a future custom domain
+  // (BASE_PATH=/ with solitaire.shellbackstudio.xyz).
+  base: process.env.BASE_PATH ?? '/shellback-solitaire/',
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
