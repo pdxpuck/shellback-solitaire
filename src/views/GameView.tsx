@@ -8,13 +8,19 @@
  * toggle is on) — which is exactly one undo group. The board is placed from
  * klondikeDraw1.layout on a 7-column CSS grid.
  *
+ * Card flights (C3) are purely cosmetic: commit applies the final state
+ * instantly and authoritatively, and a fixed-position overlay flies ghost
+ * cards from their measured pre-move spots to their computed landings while
+ * the moved board cards stay hidden until their last leg settles. Any cancel
+ * (new commit, undo, new deal, unmount) just snaps to the final layout.
+ *
  * Every deal carries a game # (the seed, 1..1,000,000): the toolbar shows it
  * (or "Practice deal" for legacy string seeds) and the "Play #" input
  * replays any deal exactly by number.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
-import type { Action, PileId } from 'deckhand/engine'
+import type { Action, PileCard, PileId } from 'deckhand/engine'
 import type { LayoutHint } from 'deckhand/contract'
 import type { CardTheme } from 'deckhand/renderer'
 import { CardView } from 'deckhand/renderer'
@@ -32,6 +38,7 @@ import {
   worldFor,
   type GameState,
 } from '../games/klondike/play'
+import { flightSteps } from './flights'
 
 interface GameViewProps {
   meta: GameMeta
@@ -48,6 +55,10 @@ const FAN_RATIO = 0.28
 const COLUMN_HEIGHT_LIMIT = 0.7
 /** Compressed piles never squeeze tighter than this many px per card. */
 const MIN_FAN_OFFSET = 16
+/** Flight cadence: each step's leg starts this long after the previous one. */
+const FLIGHT_STEP_MS = 220
+/** One flight leg's duration (matches the .flight-card CSS animation). */
+const FLIGHT_MS = 200
 
 /** Faint glyph on an empty foundation slot (presentation chrome only). */
 const FOUNDATION_GLYPHS: Partial<Record<PileId, string>> = {
@@ -76,6 +87,26 @@ function fanOffset(count: number, cardHeight: number): number {
   const base = cardHeight * FAN_RATIO
   const cap = (window.innerHeight * COLUMN_HEIGHT_LIMIT - cardHeight) / (count - 1)
   return Math.min(base, Math.max(cap, MIN_FAN_OFFSET))
+}
+
+/** One card's flight leg: viewport source position + delta to its landing spot. */
+interface FlightSpec {
+  readonly cardId: string
+  readonly srcLeft: number
+  readonly srcTop: number
+  readonly dx: number
+  readonly dy: number
+  readonly delayMs: number
+}
+
+/** The active flight overlay: per-leg specs, settle progression, generation guard. */
+interface FlightsState {
+  /** Bumped per commit — stale settle timers must never touch a newer overlay. */
+  readonly gen: number
+  readonly specs: readonly FlightSpec[]
+  readonly stepCount: number
+  /** Steps that have fully landed so far (moved board cards unhide past theirs). */
+  readonly settled: number
 }
 
 /** One legal player click: the move proper + any flip composed after it. */
@@ -115,6 +146,14 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
   const [dealInput, setDealInput] = useState('')
   const [dealInvalid, setDealInvalid] = useState(false)
   const dealInvalidTimer = useRef<number | null>(null)
+  /** The board section — the DOM hooks flights measure against. */
+  const boardRef = useRef<HTMLElement | null>(null)
+  /** Active flight overlay, or null when the board is instant (see header). */
+  const [flights, setFlights] = useState<FlightsState | null>(null)
+  /** All pending flight settle timers — cleared on every cancel path. */
+  const flightTimers = useRef<number[]>([])
+  /** Monotonic overlay generation; captured by each settle timer. */
+  const flightsGen = useRef(0)
 
   const world = worldFor(state)
   const won = isWonState(state)
@@ -133,24 +172,150 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
     }
   }
 
+  /** Cards whose last flight leg has not landed yet — hidden on the board. */
+  const hiddenCards = new Set<string>()
+  if (flights !== null) {
+    const lastStep = new Map<string, number>()
+    for (const spec of flights.specs) {
+      const step = spec.delayMs / FLIGHT_STEP_MS
+      lastStep.set(spec.cardId, Math.max(lastStep.get(spec.cardId) ?? -1, step))
+    }
+    for (const [cardId, step] of lastStep) {
+      if (step >= flights.settled) hiddenCards.add(cardId)
+    }
+  }
+
+  /** Flight ghost art, looked up from the FINAL world (id → card + face-up). */
+  const flyingCardById = new Map<string, PileCard>()
+  if (flights !== null) {
+    for (const pile of Object.values(world.piles)) {
+      for (const pc of pile.cards) flyingCardById.set(pc.card.id, pc)
+    }
+  }
+
   // A win drops the save (win/loss stats stay deferred, D6) — idempotent.
   useEffect(() => {
     if (won) clearGame()
   }, [won])
 
-  // Clear a pending invalid-feedback timer on unmount.
+  // Clear pending timers (invalid-feedback + flight settle chain) on unmount.
   useEffect(
     () => () => {
       if (dealInvalidTimer.current !== null) window.clearTimeout(dealInvalidTimer.current)
+      for (const timer of flightTimers.current) window.clearTimeout(timer)
     },
     [],
   )
 
   const deselect = () => setSelected(null)
 
+  /** Cancel any active flight overlay: clear timers + drop it (board snaps). */
+  const cancelFlights = () => {
+    for (const timer of flightTimers.current) window.clearTimeout(timer)
+    flightTimers.current = []
+    setFlights(null)
+  }
+
+  /**
+   * Begin the cosmetic flight overlay for one committed action group,
+   * measured against the render-time DOM BEFORE the final state renders. The
+   * state update stays instant and authoritative: any abort (missing DOM
+   * hook, reduced motion, no move steps) just leaves the instant board.
+   */
+  const startFlights = (group: readonly Action[]) => {
+    for (const timer of flightTimers.current) window.clearTimeout(timer)
+    flightTimers.current = []
+    const steps = flightSteps(world, group)
+    if (
+      steps.length === 0 ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      setFlights(null)
+      return
+    }
+    const board = boardRef.current
+    if (board === null) {
+      setFlights(null)
+      return
+    }
+    // Pre-move position of every card that will fly, from the pre-setState
+    // DOM: a card's first leg starts where it sits now; later legs chain from
+    // the previous leg's computed destination — never a re-query (the DOM
+    // already shows the final layout by the time anything animates).
+    const domPos = new Map<string, { left: number; top: number }>()
+    for (const step of steps) {
+      for (const cardId of step.cardIds) {
+        if (domPos.has(cardId)) continue
+        const el = board.querySelector(`[data-card-id="${cardId}"]`)
+        if (el === null) {
+          setFlights(null) // Missing hook → today's instant behavior.
+          return
+        }
+        const rect = el.getBoundingClientRect()
+        domPos.set(cardId, { left: rect.left, top: rect.top })
+      }
+    }
+    const gen = ++flightsGen.current
+    const specs: FlightSpec[] = []
+    // Viewport spot each card occupies after its most recent leg.
+    const flownTo = new Map<string, { left: number; top: number }>()
+    for (let k = 0; k < steps.length; k++) {
+      const step = steps[k]
+      const slot = board.querySelector(`[data-pile-id="${step.toPile}"]`)
+      if (slot === null) {
+        setFlights(null)
+        return
+      }
+      const rect = slot.getBoundingClientRect()
+      // Tableaux land the run at its final fan indices (the landed count sets
+      // the fan); other piles land the top card at the slot origin.
+      const fan =
+        ROLES.get(step.toPile) === 'tableau' ? fanOffset(step.landedOnCount, cardHeight) : 0
+      const run = step.cardIds.length
+      for (let i = 0; i < run; i++) {
+        const cardId = step.cardIds[i]
+        const src = flownTo.get(cardId) ?? domPos.get(cardId)
+        if (src === undefined) {
+          setFlights(null) // Unmeasured card — unreachable, but never guess.
+          return
+        }
+        const left = rect.left
+        const top = rect.top + (step.landedOnCount - run + i) * fan
+        specs.push({
+          cardId,
+          srcLeft: src.left,
+          srcTop: src.top,
+          dx: left - src.left,
+          dy: top - src.top,
+          delayMs: k * FLIGHT_STEP_MS,
+        })
+        flownTo.set(cardId, { left, top })
+      }
+    }
+    setFlights({ gen, specs, stepCount: steps.length, settled: 0 })
+    // One settle timer per step: leg k lands at k * STEP + FLIGHT ms. The gen
+    // guard makes a stale chain a no-op against a newer overlay.
+    for (let k = 0; k < steps.length; k++) {
+      const landed = k + 1
+      flightTimers.current.push(
+        window.setTimeout(
+          () =>
+            setFlights((current) => {
+              if (current === null || current.gen !== gen) return current
+              return landed >= current.stepCount ? null : { ...current, settled: landed }
+            }),
+          k * FLIGHT_STEP_MS + FLIGHT_MS,
+        ),
+      )
+    }
+  }
+
   /** Execute one grouped legal move as a single player click. */
   const commit = (actions: readonly Action[]) => {
     const next = moveGroup(state, actions, { autoFly })
+    // Animate the WHOLE committed group (rule actions + moveGroup's safe
+    // flights) against the render-time world, then apply the state instantly.
+    startFlights(next.moves[next.moves.length - 1])
     setState(next)
     saveGame(next)
     setSelected(null)
@@ -176,6 +341,7 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
   }
 
   const newDeal = () => {
+    cancelFlights()
     const fresh = initialState(String(randomDealNumber()))
     setState(fresh)
     saveGame(fresh)
@@ -195,6 +361,7 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
       return
     }
     setDealInvalid(false)
+    cancelFlights()
     const fresh = initialState(String(n))
     setState(fresh)
     saveGame(fresh)
@@ -203,6 +370,7 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
   }
 
   const undo = () => {
+    cancelFlights()
     const next = { ...state, moves: state.moves.slice(0, -1) }
     setState(next)
     saveGame(next)
@@ -228,12 +396,22 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
       return (
         <div
           key={hint.pileId}
+          data-pile-id={hint.pileId}
           className={`pile-slot${clickable ? ' clickable' : ''}`}
           style={cellStyle(hint, cardHeight)}
           onClick={clickable ? stockClick : undefined}
         >
           {top !== null && (
-            <CardView card={top.card} faceUp={false} theme={theme} width={CARD_WIDTH} />
+            <div
+              className="fan-card"
+              data-card-id={top.card.id}
+              style={{
+                zIndex: 1,
+                ...(hiddenCards.has(top.card.id) ? { visibility: 'hidden' as const } : {}),
+              }}
+            >
+              <CardView card={top.card} faceUp={false} theme={theme} width={CARD_WIDTH} />
+            </div>
           )}
           {top === null && world.piles.waste.cards.length > 0 && (
             <span className="slot-glyph" aria-label="Recycle the waste">
@@ -254,6 +432,7 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
       return (
         <div
           key={hint.pileId}
+          data-pile-id={hint.pileId}
           className={slotClass}
           style={cellStyle(hint, height)}
           onClick={isTarget ? () => drop(hint.pileId) : undefined}
@@ -261,12 +440,17 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
           {cards.map((pc, i) => (
             <div
               key={pc.card.id}
+              data-card-id={pc.card.id}
               className={
                 `fan-card${isTarget && i === cards.length - 1 ? ' drop-target' : ''}` +
                 `${selectedCount > 0 && i >= cards.length - selectedCount ? ' selected-run' : ''}` +
                 `${!isTarget && pc.faceUp ? ' selectable' : ''}`
               }
-              style={{ top: i * offset, zIndex: i }}
+              style={{
+                top: i * offset,
+                zIndex: i,
+                ...(hiddenCards.has(pc.card.id) ? { visibility: 'hidden' as const } : {}),
+              }}
               onClick={(e: ReactMouseEvent) => {
                 e.stopPropagation()
                 if (isTarget) drop(hint.pileId)
@@ -285,18 +469,23 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
     return (
       <div
         key={hint.pileId}
+        data-pile-id={hint.pileId}
         className={slotClass}
         style={cellStyle(hint, cardHeight)}
         onClick={isTarget ? () => drop(hint.pileId) : undefined}
       >
         {top !== null ? (
           <div
+            data-card-id={top.card.id}
             className={
               `fan-card${isTarget ? ' drop-target' : ''}` +
               `${selectedTop ? ' selected-run' : ''}` +
               `${!isTarget && top.faceUp ? ' selectable' : ''}`
             }
-            style={{ zIndex: 1 }}
+            style={{
+              zIndex: 1,
+              ...(hiddenCards.has(top.card.id) ? { visibility: 'hidden' as const } : {}),
+            }}
             onClick={(e: ReactMouseEvent) => {
               e.stopPropagation()
               if (isTarget) drop(hint.pileId)
@@ -373,11 +562,41 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
         </div>
       </header>
 
-      <section className="board" aria-label={`${meta.title} table`}>
+      <section className="board" ref={boardRef} aria-label={`${meta.title} table`}>
         {klondikeDraw1.layout.map(renderPile)}
       </section>
 
-      {won && (
+      {/* Cosmetic flight ghosts — one per card leg; clicks pass through. */}
+      {flights !== null && (
+        <div className="flight-layer" aria-hidden="true">
+          {flights.specs.map((spec) => {
+            const pc = flyingCardById.get(spec.cardId)
+            if (pc === undefined) return null
+            return (
+              <div
+                key={`${spec.cardId}-${spec.delayMs}`}
+                className="flight-card"
+                style={
+                  {
+                    left: spec.srcLeft,
+                    top: spec.srcTop,
+                    width: CARD_WIDTH,
+                    animationDelay: `${spec.delayMs}ms`,
+                    '--flight-dur': `${FLIGHT_MS}ms`,
+                    '--dx': `${spec.dx}px`,
+                    '--dy': `${spec.dy}px`,
+                  } as CSSProperties
+                }
+              >
+                <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* The banner waits until the winning flights have landed. */}
+      {won && flights === null && (
         <div className="win-overlay">
           <div className="win-banner">
             <p>

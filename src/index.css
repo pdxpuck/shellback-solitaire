@@ -404,3 +404,35 @@ body {
   font-size: 1.2rem;
   font-weight: 600;
 }
+
+/* ---- game view: card-flight overlay (C3) ---- */
+
+/* Fixed overlay hosting in-flight card ghosts; clicks pass through and it
+   sits under the win overlay. */
+
+.flight-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* One flying card leg: planted at its measured source, translated by the
+   inline --dx/--dy over --flight-dur. fill-mode both holds the source spot
+   through the step's animation delay. */
+
+.flight-card {
+  position: fixed;
+  z-index: 50;
+  will-change: transform;
+  animation: flight-move var(--flight-dur, 200ms) ease both;
+}
+
+@keyframes flight-move {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(var(--dx), var(--dy));
+  }
+}

@@ -79,3 +79,15 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   final model — add double-click (send to foundation) and/or drag-and-drop as
   additional interaction modes. Click-click remains supported.
 - Deal numbers + Play-# replay + settings (theme, auto-fly) all verified in play.
+
+### C3 batch A: flight animation (2026-10-15, v0.3.3)
+- Card-flight overlay wired into GameView per the verdict above: state stays INSTANT and
+  authoritative — commit applies the final state immediately; the flight layer is purely
+  cosmetic and cancellable at any moment (new commit / undo / new deal / unmount all cancel;
+  the board snaps to the final layout).
+- Sequenced steps: one 200 ms eased leg per move action at a 220 ms cadence; a run or a
+  waste recycle flies as one mass; the win banner waits until flights land.
+- Geometry measured BEFORE setState via data-pile-id / data-card-id DOM hooks; tableau
+  landings use the landed fan offset (landedOnCount — new flightSteps field); multi-leg
+  cards chain leg-to-leg and never re-query the DOM.
+- prefers-reduced-motion or any missing DOM hook skips flights entirely (instant fallback).
