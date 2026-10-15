@@ -147,6 +147,9 @@ out deckhand, symlinks the sibling, builds the lib before installing
 solitaire. Live-site fixes (v0.3.13 + deckhand 0.4.3): root-absolute art URLs
 404'd under the base (setThemeBase introduced); findLastIndex/.at crashed
 older mobile browsers at GameView mount (blank page) — replaced with index math.
+v0.3.14 + deckhand 0.4.5: react/react-dom out of deckhand's runtime dependencies —
+CI's separate deckhand npm ci produced a second React copy in the consumer bundle
+(null-useState crash at GameView mount); peers are the only runtime declaration now.
 
 ### C3 batch C: drag-and-drop (2026-10-15, v0.3.9)
 - First deckhand useDrag consumer (0.4.2, click-compatible: onDragStart fires on EVERY
