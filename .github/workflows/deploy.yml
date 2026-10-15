@@ -21,10 +21,24 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # deckhand is declared as file:../deckhand; fetch it into the workspace
+      # so its lib can be built before solitaire is installed.
+      - name: Check out deckhand (file:../deckhand sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: pdxpuck/deckhand
+          path: deckhand
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+      # npm resolves file:../deckhand relative to the package dir — one level
+      # ABOVE $GITHUB_WORKSPACE — so symlink the checkout to the sibling spot.
+      - name: Expose deckhand at the file:-expected sibling path
+        run: ln -s "$GITHUB_WORKSPACE/deckhand" "$GITHUB_WORKSPACE/../deckhand"
+      - name: Build deckhand lib
+        run: npm ci && npm run build:lib
+        working-directory: deckhand
       - run: npm ci
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3

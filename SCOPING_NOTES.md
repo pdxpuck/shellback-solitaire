@@ -141,7 +141,10 @@ to main), Vite `base` path `/shellback-solitaire/` (env-overridable:
 `BASE_PATH=/` for the optional-later solitaire.shellbackstudio.xyz subdomain,
 same DNS pattern as shellback-studio-site), and Pages enablement via gh api
 (build_type=workflow — done by the operator at deploy time). Live-URL
-verification happens post-push.
+verification happens post-push. CI fix (v0.3.12): first deploy run failed
+on the file:../deckhand dep (no sibling on the runner); workflow now checks
+out deckhand, symlinks the sibling, builds the lib before installing
+solitaire.
 
 ### C3 batch C: drag-and-drop (2026-10-15, v0.3.9)
 - First deckhand useDrag consumer (0.4.2, click-compatible: onDragStart fires on EVERY
