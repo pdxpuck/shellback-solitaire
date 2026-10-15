@@ -192,3 +192,9 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
   presses ignored during the glide).
 - Activated-drag ends swallow the trailing browser click (dragJustEnded guard at the top of
   every card onClick); undo / new deal / play # cancel the drag alongside cancelFlights.
+
+### KNOWN BUG (next session, v0.4.2): canfield waste→foundation enumeration missing
+- User hit (2026-10-15, live, Canfield Preview): base rank 7; a second 7 surfaced from the stock would NOT double-click to a foundation — it flew to a tableau instead (left-most fallback).
+- Root cause: canfield legalMoves enumerates foundation moves for reserve tops + tableau tops but NOT the waste top — the enumeration block was omitted from the CB2 spec (Klondike's template has it; the module header's emit-order line inherits the same omission).
+- Fix spec (v0.4.2, ~15 min): in legalMoves' foundation section, add the wasteTop block mirroring Klondike — if (wasteTop) { for (const foundation of FOUNDATION_IDS) { if (canDropOnFoundation(world, foundation, wasteTop.card)) moves.push({ type: 'move', from: 'waste', to: foundation, count: 1 }) } } — placed with the other foundation sections; update the header's emit-order line (reserve top, waste top, then tableau tops); +2 tests (base-rank card from the waste onto an EMPTY foundation; next-rank card from the waste onto a BUILT foundation). quickMove/quickFly need NO changes — they consume legalMoves.
+- ALSO open from earlier: the v0.3.20 ghost flight-order z fix shipped but user confirmation is PENDING (they moved to Canfield before retesting Klondike cascades — verify with ?slowmo=4).
