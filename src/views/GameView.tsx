@@ -3,9 +3,10 @@
  * (C3): click-click — click a face-up tableau card to select its run (or a
  * waste/foundation top card to select it), legal destinations highlight,
  * click one to move — and double-click smart move, which quick-flies the
- * clicked card/run to the first legal foundation move, else to its unique
- * legal destination (an ambiguous position moves nothing; the stock keeps
- * its exclusive click semantics). A stock click draws; an empty-stock click
+ * clicked card/run to the first legal foundation move, else to its LEFT-MOST
+ * legal destination (ambiguity resolves left-most — lowest layout column,
+ * ties → first group; the stock is never auto-chosen, so recycling stays a
+ * deliberate stock click). A stock click draws; an empty-stock click
  * (waste nonempty) recycles the waste; a click elsewhere deselects.
  * Drag-and-drop (C3): pressing a face-up card and moving past a 6px threshold
  * drags its whole run as a ghost — a legal drop commits WITHOUT flight
@@ -107,6 +108,9 @@ const FOUNDATION_GLYPHS: Partial<Record<PileId, string>> = {
 
 /** Pile id → role, from the game definition's pile topology. */
 const ROLES = new Map(klondikeDraw1.piles.map((pile) => [pile.id, pile.role]))
+
+/** Pile id → layout column, from the game definition's layout hints. */
+const LAYOUT_COL = new Map(klondikeDraw1.layout.map((hint) => [hint.pileId, hint.col]))
 
 /**
  * The deal # for a seed, when the seed is numeric: Number() parses it and
@@ -472,10 +476,12 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
 
   /**
    * Double-click smart move: the first legal foundation move, else the
-   * unique legal destination. Ambiguous positions move nothing.
+   * LEFT-MOST legal destination (lowest layout column; ties → first group)
+   * — ambiguity never blocks the fly, and the stock is never auto-chosen
+   * (recycling stays a deliberate stock click).
    */
   const quickFly = (from: PileId, count: number) => {
-    const g = quickMove(groups, from, count, (id) => ROLES.get(id))
+    const g = quickMove(groups, from, count, (id) => ROLES.get(id), (id) => LAYOUT_COL.get(id) ?? 99)
     if (g) commit(g.actions)
   }
 

@@ -1,7 +1,9 @@
 /**
  * groupMoves + foundationMove + quickMove suite (C3 batch B double-click
  * quick-fly; v0.3.5 smartens it — foundation-first, else the unique legal
- * destination).
+ * destination; v0.3.16 resolves ambiguity to the LEFT-MOST legal
+ * destination (lowest layout column, ties → first group) and excludes stock
+ * targets — recycle stays a deliberate stock click).
  * Worlds come in the two flavors the other suites use: crafted rigs built
  * with engine primitives (as in flights.test.ts) for precise grouping and
  * null-case scenarios, and real deals via klondikeDraw1.deal where a natural
@@ -66,6 +68,10 @@ function rig(...entries: readonly RigEntry[]): World {
 /** Pile id → role, straight from the game definition's topology. */
 const ROLES = new Map(game.piles.map((pile) => [pile.id, pile.role]))
 const roleOf = (pileId: PileId): PileRole | undefined => ROLES.get(pileId)
+
+/** Pile id → layout column, straight from the game definition's layout. */
+const COLS = new Map(game.layout.map((hint) => [hint.pileId, hint.col]))
+const colOf = (pileId: PileId): number => COLS.get(pileId) ?? 99
 
 // --- groupMoves --------------------------------------------------------------
 
@@ -194,7 +200,7 @@ describe('quickMove', () => {
     const before = rig(up('found-H', [['H', 1]]), up('t0', [['H', 2]]), up('t1', [['S', 3]]))
     const groups = groupMoves(game.legalMoves(before))
     expect(groups).toHaveLength(2) // both destinations are live — not vacuous
-    expect(quickMove(groups, 't0', 1, roleOf)?.move).toEqual({
+    expect(quickMove(groups, 't0', 1, roleOf, colOf)?.move).toEqual({
       type: 'move',
       from: 't0',
       to: 'found-H',
@@ -215,7 +221,7 @@ describe('quickMove', () => {
       up('t1', [['D', 7]]),
     )
     const groups = groupMoves(game.legalMoves(before))
-    expect(quickMove(groups, 't0', 2, roleOf)?.move).toEqual({
+    expect(quickMove(groups, 't0', 2, roleOf, colOf)?.move).toEqual({
       type: 'move',
       from: 't0',
       to: 't1',
@@ -223,19 +229,25 @@ describe('quickMove', () => {
     })
   })
 
-  it('two distinct tableau destinations → null (ambiguous; click-click disambiguates)', () => {
-    // H5 fits BOTH black sixes: (t0, 1) offers t1 and t2 — no unique
-    // destination, so a double-click must do nothing.
+  it('two distinct tableau destinations → the LEFT-MOST wins (lowest layout column)', () => {
+    // H5 fits BOTH black sixes: (t0, 1) offers t1 (col 1) and t2 (col 2) —
+    // ambiguity must not block the fly (user ruling 2026-10-15: a drawn King
+    // over two empty columns flies LEFT), so the lower-column t1 lands it.
     const before = rig(up('t0', [['H', 5]]), up('t1', [['S', 6]]), up('t2', [['C', 6]]))
     const groups = groupMoves(game.legalMoves(before))
     expect(groups).toHaveLength(2) // both destinations are live — not vacuous
-    expect(quickMove(groups, 't0', 1, roleOf)).toBeNull()
+    expect(quickMove(groups, 't0', 1, roleOf, colOf)?.move).toEqual({
+      type: 'move',
+      from: 't0',
+      to: 't1',
+      count: 1,
+    })
   })
 
   it('zero matching groups → null', () => {
     // Seed 4: only (t2, 1) flies — asking for the 3-card run matches nothing.
     const groups = groupMoves(game.legalMoves(game.deal('4')))
-    expect(quickMove(groups, 't2', 3, roleOf)).toBeNull()
+    expect(quickMove(groups, 't2', 3, roleOf, colOf)).toBeNull()
   })
 
   it('a source ON a foundation → null, even though a unique pull-back is live', () => {
@@ -244,14 +256,13 @@ describe('quickMove', () => {
     const before = rig(up('found-S', [['S', 2]]), up('t0', [['H', 3]]))
     const groups = groupMoves(game.legalMoves(before))
     expect(groups).toHaveLength(1) // the pull exists — the null is not vacuous
-    expect(quickMove(groups, 'found-S', 1, roleOf)).toBeNull()
+    expect(quickMove(groups, 'found-S', 1, roleOf, colOf)).toBeNull()
   })
 
   it('duplicate groups pointing at the SAME destination → returned (unique target, not unique group)', () => {
     // Real positions offer one group per target, so duplicates are crafted
-    // (mirrors foundationMove's ordering pin): candidates.length is 2 but
-    // targets.size is 1 — the FIRST group wins, and length-based logic
-    // would wrongly read this as ambiguous.
+    // (mirrors foundationMove's ordering pin): both candidates share one
+    // destination, and the FIRST group wins.
     const first: MoveGroup = {
       move: { type: 'move', from: 't0', to: 't1', count: 1 },
       actions: [{ type: 'move', from: 't0', to: 't1', count: 1 }],
@@ -260,6 +271,39 @@ describe('quickMove', () => {
       move: { type: 'move', from: 't0', to: 't1', count: 1 },
       actions: [{ type: 'move', from: 't0', to: 't1', count: 1 }],
     }
-    expect(quickMove([first, second], 't0', 1, roleOf)).toBe(first)
+    expect(quickMove([first, second], 't0', 1, roleOf, colOf)).toBe(first)
+  })
+
+  it('a stock destination is NEVER auto-chosen, even when it is the left-most column', () => {
+    // Crafted (real layout: stock col 0, t3 col 3): a single-card waste with
+    // an empty stock makes the recycle (waste→stock, count 1) a LIVE
+    // candidate for the same (from, count) as a tableau landing — yet the
+    // stock must lose (recycling is a deliberate stock click), left-most or
+    // not. The recycle is listed FIRST to prove ordering does not rescue it.
+    const recycle: MoveGroup = {
+      move: { type: 'move', from: 'waste', to: 'stock', count: 1, faceUp: false, reverse: true },
+      actions: [{ type: 'move', from: 'waste', to: 'stock', count: 1, faceUp: false, reverse: true }],
+    }
+    const tableau: MoveGroup = {
+      move: { type: 'move', from: 'waste', to: 't3', count: 1 },
+      actions: [{ type: 'move', from: 'waste', to: 't3', count: 1 }],
+    }
+    expect(quickMove([recycle, tableau], 'waste', 1, roleOf, colOf)).toBe(tableau)
+  })
+
+  it('two destinations on the SAME column → the FIRST group in order wins (deterministic tie-break)', () => {
+    // Real layout: waste and t1 both sit on col 1 — the crafted draw
+    // (stock→waste) and tableau landing (stock→t1) tie on column, so the
+    // scan order decides, not the pile. Both orders pinned: first group wins.
+    const draw: MoveGroup = {
+      move: { type: 'move', from: 'stock', to: 'waste', count: 1, faceUp: true },
+      actions: [{ type: 'move', from: 'stock', to: 'waste', count: 1, faceUp: true }],
+    }
+    const landing: MoveGroup = {
+      move: { type: 'move', from: 'stock', to: 't1', count: 1 },
+      actions: [{ type: 'move', from: 'stock', to: 't1', count: 1 }],
+    }
+    expect(quickMove([draw, landing], 'stock', 1, roleOf, colOf)).toBe(draw)
+    expect(quickMove([landing, draw], 'stock', 1, roleOf, colOf)).toBe(landing)
   })
 })

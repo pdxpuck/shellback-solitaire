@@ -11,8 +11,10 @@
  * group sending a run straight to a foundation. Sources already on a
  * foundation never fly again (only a deliberate click-click can pull a card
  * back off a foundation). quickMove is the full double-click smart move:
- * foundation first, else the run's UNIQUE legal destination — an ambiguous
- * position moves nothing.
+ * foundation first, else the run's LEFT-MOST legal destination (lowest
+ * layout column; ties keep the first group in order) — ambiguity never
+ * blocks the fly, and a stock target is never auto-chosen (recycle stays a
+ * deliberate stock click).
  */
 import type { Action, PileId } from 'deckhand/engine'
 import type { PileRole } from 'deckhand/contract'
@@ -69,18 +71,21 @@ export function foundationMove(
 
 /**
  * The double-click smart move for `count` cards from `from`: the first
- * legal foundation move when one exists, else the move to the UNIQUE legal
- * destination — however many duplicate groups point there. Null when the
- * position is ambiguous (2+ distinct targets), when nothing matches, or
- * when `from` is itself a foundation (pull-backs stay deliberate
- * click-click). Returns the WHOLE group, so its `.actions` carries any
- * trailing flip.
+ * legal foundation move when one exists, else the LEFT-MOST legal
+ * destination — the candidate whose target sits on the LOWEST layout column
+ * (`colOf`), with ties keeping the FIRST group in order (deterministic).
+ * Stock targets are never auto-chosen: recycling the waste is a deliberate
+ * stock click, not a fly (user ruling 2026-10-15 — ambiguity must not block
+ * the quick action). Null only when nothing matches or when `from` is
+ * itself a foundation (pull-backs stay deliberate click-click). Returns the
+ * WHOLE group, so its `.actions` carries any trailing flip.
  */
 export function quickMove(
   groups: readonly MoveGroup[],
   from: PileId,
   count: number,
   roleOf: (pileId: PileId) => PileRole | undefined,
+  colOf: (pileId: PileId) => number,
 ): MoveGroup | null {
   const foundation = foundationMove(groups, from, count, roleOf)
   if (foundation !== null) return foundation
@@ -88,8 +93,9 @@ export function quickMove(
     (group) =>
       group.move.from === from &&
       group.move.count === count &&
-      roleOf(from) !== 'foundation',
+      roleOf(from) !== 'foundation' &&
+      roleOf(group.move.to) !== 'stock',
   )
-  const targets = new Set(candidates.map((g) => g.move.to))
-  return targets.size === 1 ? candidates[0] : null
+  if (candidates.length === 0) return null
+  return candidates.reduce((best, g) => (colOf(g.move.to) < colOf(best.move.to) ? g : best))
 }

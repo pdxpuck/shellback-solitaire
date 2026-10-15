@@ -132,6 +132,11 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   EXPOSED the flip); GameView renders that card face-down until the exposing
   leg's settle timer fires (lift → land → THEN the reveal). An un-revealed card
   is also unselectable and undraggable (visually face-down = behaves face-down).
+  (i) user ruling (v0.3.16) — ambiguity must not block quick-fly: quickMove now
+  picks the LOWEST-LAYOUT-COLUMN destination among matching legal moves
+  (left-most; ties → first group in order), and the stock is excluded as an
+  auto-target (recycle stays a deliberate stock click; drag-drop onto the stock
+  stays allowed — user-aimed).
 
 ### Deployment (implemented, v0.3.11 — user intent 2026-10-15)
 Published via GitHub Pages — the repo is standalone, so an Actions
