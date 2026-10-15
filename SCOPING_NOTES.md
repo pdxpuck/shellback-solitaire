@@ -165,6 +165,7 @@ resolve.dedupe ['react','react-dom'] pins the app's copy. v0.3.17 PWA: manifest/
 SW scoped to the base path so sibling Pages sites are unaffected.
 
 Canfield (C3 proper) next: rules digest captured at docs/CANFIELD_RULES.md (Wikipedia, 2026-10-15); expected deckhand contract churn listed there.
+CB2 (v0.4.0): canfield definition+play modules, logic-complete + tested (85→122 tests); registry still 'planned' — GameView generalization (CB3, v0.4.1) makes it Preview-able.
 
 Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table presets setting → unlockable tables earned by wins (chains to win-stats/D6).
 
