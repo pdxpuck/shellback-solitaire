@@ -79,7 +79,9 @@ export function flightPlan(before: World, actions: readonly Action[]): FlightPla
       // replayed world. It reveals only when its exposing move's leg lands
       // (?? 0: a leading flip is malformed but non-fatal — it reveals with
       // step 0's settle).
-      const flipped = world.piles[action.pile].cards.at(-1)
+      // ES2023 .at() is polyfill-free in esbuild builds and crashes older mobile browsers — plain index math instead.
+      const pileCards = world.piles[action.pile].cards
+      const flipped = pileCards.length > 0 ? pileCards[pileCards.length - 1] : undefined
       if (flipped !== undefined) revealAt[flipped.card.id] = lastMoveStep ?? 0
     }
   }

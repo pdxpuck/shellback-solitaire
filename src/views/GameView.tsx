@@ -742,7 +742,14 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
     // Waste / foundation: render the topmost VISIBLE card down — an incoming
     // (still-flying, hidden) top card must never blank the pile (see header).
     // Empty or all-hidden keeps the empty-slot fallback (foundation glyph).
-    const visibleIdx = cards.findLastIndex((pc) => !hiddenCards.has(pc.card.id))
+    // ES2023 findLastIndex is polyfill-free in esbuild builds and crashes older mobile browsers — plain reverse index scan instead.
+    let visibleIdx = -1
+    for (let i = cards.length - 1; i >= 0; i--) {
+      if (!hiddenCards.has(cards[i].card.id)) {
+        visibleIdx = i
+        break
+      }
+    }
     const selectedTop = selected !== null && selected.pileId === hint.pileId
     return (
       <div
