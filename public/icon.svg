@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Shellback Solitaire brand icon (first pass). Navy rounded field; every
+       mark stays inside the inner ~80% so maskable crops never clip it. -->
+  <rect width="512" height="512" rx="96" fill="#16324f" />
+  <!-- White playing card (236x330, corners within the maskable safe circle) -->
+  <rect x="138" y="91" width="236" height="330" rx="24" fill="#ffffff" stroke="#d8dee6" stroke-width="2" />
+  <!-- Spade: inverted-heart body (two lobes) + flared stem, hand-authored -->
+  <path fill="#000000" d="M 256 176 C 250 198 196 224 196 268 C 196 290 212 304 233 304 C 243 304 252 299 256 290 C 260 299 269 304 279 304 C 300 304 316 290 316 268 C 316 224 262 198 256 176 Z" />
+  <path fill="#000000" d="M 242 336 C 250 328 253 316 252 288 L 260 288 C 259 316 262 328 270 336 Z" />
+</svg>
