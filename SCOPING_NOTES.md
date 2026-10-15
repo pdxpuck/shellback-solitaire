@@ -99,3 +99,9 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   card back off a foundation stays a deliberate click-click.
 - groupMoves + MoveGroup extracted verbatim from GameView into games/klondike/interaction.ts,
   joined by the pure foundationMove lookup — unit-tested in interaction.test.ts.
+- Playtest 2026-10-15 (v0.3.5) addendum:
+  (a) animations PASSED with one defect — a card with back-to-back legs (draw→foundation)
+  blinked via two sequential ghost legs; legs now collapse to ONE arc per card (hideUntil map
+  replaces spec-derived hiding).
+  (b) foundation-only quick-fly worked but felt unintuitive → quickMove: foundation-first,
+  else the UNIQUE legal destination, ambiguous → nothing (click-click disambiguates).

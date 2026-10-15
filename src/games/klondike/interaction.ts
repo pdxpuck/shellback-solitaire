@@ -7,10 +7,12 @@
  * plus any flip composed after it on the same source pile (see movePlusFlip
  * in the definition) is ONE MoveGroup = ONE click = ONE undo group.
  *
- * foundationMove resolves a double-click (source pile + run count) to the
- * first legal move group sending that run straight to a foundation — the
- * quick-fly. Sources already on a foundation never fly again (only a
- * deliberate click-click can pull a card back off a foundation).
+ * foundationMove is the foundation-first primitive: the first legal move
+ * group sending a run straight to a foundation. Sources already on a
+ * foundation never fly again (only a deliberate click-click can pull a card
+ * back off a foundation). quickMove is the full double-click smart move:
+ * foundation first, else the run's UNIQUE legal destination — an ambiguous
+ * position moves nothing.
  */
 import type { Action, PileId } from 'deckhand/engine'
 import type { PileRole } from 'deckhand/contract'
@@ -63,4 +65,31 @@ export function foundationMove(
         roleOf(group.move.to) === 'foundation',
     ) ?? null
   )
+}
+
+/**
+ * The double-click smart move for `count` cards from `from`: the first
+ * legal foundation move when one exists, else the move to the UNIQUE legal
+ * destination — however many duplicate groups point there. Null when the
+ * position is ambiguous (2+ distinct targets), when nothing matches, or
+ * when `from` is itself a foundation (pull-backs stay deliberate
+ * click-click). Returns the WHOLE group, so its `.actions` carries any
+ * trailing flip.
+ */
+export function quickMove(
+  groups: readonly MoveGroup[],
+  from: PileId,
+  count: number,
+  roleOf: (pileId: PileId) => PileRole | undefined,
+): MoveGroup | null {
+  const foundation = foundationMove(groups, from, count, roleOf)
+  if (foundation !== null) return foundation
+  const candidates = groups.filter(
+    (group) =>
+      group.move.from === from &&
+      group.move.count === count &&
+      roleOf(from) !== 'foundation',
+  )
+  const targets = new Set(candidates.map((g) => g.move.to))
+  return targets.size === 1 ? candidates[0] : null
 }

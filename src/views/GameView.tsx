@@ -2,9 +2,10 @@
  * GameView — the playable Klondike (Draw-1) screen. Two interaction modes
  * (C3): click-click — click a face-up tableau card to select its run (or a
  * waste/foundation top card to select it), legal destinations highlight,
- * click one to move — and double-click-to-foundation, which quick-flies the
- * clicked card/run via the first legal foundation move (the stock keeps its
- * exclusive click semantics). A stock click draws; an empty-stock click
+ * click one to move — and double-click smart move, which quick-flies the
+ * clicked card/run to the first legal foundation move, else to its unique
+ * legal destination (an ambiguous position moves nothing; the stock keeps
+ * its exclusive click semantics). A stock click draws; an empty-stock click
  * (waste nonempty) recycles the waste; a click elsewhere deselects. Every
  * player click commits as ONE
  * moveGroup (rule actions + its safe flights when the settings autoFly
@@ -12,10 +13,12 @@
  * klondikeDraw1.layout on a 7-column CSS grid.
  *
  * Card flights (C3) are purely cosmetic: commit applies the final state
- * instantly and authoritatively, and a fixed-position overlay flies ghost
- * cards from their measured pre-move spots to their computed landings while
- * the moved board cards stay hidden until their last leg settles. Any cancel
- * (new commit, undo, new deal, unmount) just snaps to the final layout.
+ * instantly and authoritatively, and a fixed-position overlay flies ONE
+ * merged ghost arc per card — from its measured pre-move spot to its final
+ * landing, even across back-to-back legs (a draw that continues onto a
+ * foundation is one sweep) — while the moved board cards stay hidden until
+ * their arc's settle timer fires. Any cancel (new commit, undo, new deal,
+ * unmount) just snaps to the final layout.
  *
  * Every deal carries a game # (the seed, 1..1,000,000): the toolbar shows it
  * (or "Practice deal" for legacy string seeds) and the "Play #" input
@@ -29,7 +32,7 @@ import type { CardTheme } from 'deckhand/renderer'
 import { CardView } from 'deckhand/renderer'
 import type { GameMeta } from '../games/registry'
 import { klondikeDraw1 } from '../games/klondike/definition'
-import { foundationMove, groupMoves } from '../games/klondike/interaction'
+import { groupMoves, quickMove } from '../games/klondike/interaction'
 import {
   clearGame,
   initialState,
@@ -103,11 +106,13 @@ interface FlightSpec {
   readonly delayMs: number
 }
 
-/** The active flight overlay: per-leg specs, settle progression, generation guard. */
+/** The active flight overlay: per-card arcs, settle progression, generation guard. */
 interface FlightsState {
   /** Bumped per commit — stale settle timers must never touch a newer overlay. */
   readonly gen: number
   readonly specs: readonly FlightSpec[]
+  /** cardId → its LAST leg's step index; the board hides the card until then. */
+  readonly hideUntil: Readonly<Record<string, number>>
   readonly stepCount: number
   /** Steps that have fully landed so far (moved board cards unhide past theirs). */
   readonly settled: number
@@ -150,16 +155,11 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
     }
   }
 
-  /** Cards whose last flight leg has not landed yet — hidden on the board. */
+  /** Cards whose flight arc has not landed yet — hidden on the board. */
   const hiddenCards = new Set<string>()
   if (flights !== null) {
-    const lastStep = new Map<string, number>()
-    for (const spec of flights.specs) {
-      const step = spec.delayMs / FLIGHT_STEP_MS
-      lastStep.set(spec.cardId, Math.max(lastStep.get(spec.cardId) ?? -1, step))
-    }
-    for (const [cardId, step] of lastStep) {
-      if (step >= flights.settled) hiddenCards.add(cardId)
+    for (const [cardId, lastLeg] of Object.entries(flights.hideUntil)) {
+      if (lastLeg >= flights.settled) hiddenCards.add(cardId)
     }
   }
 
@@ -196,9 +196,13 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
 
   /**
    * Begin the cosmetic flight overlay for one committed action group,
-   * measured against the render-time DOM BEFORE the final state renders. The
-   * state update stays instant and authoritative: any abort (missing DOM
-   * hook, reduced motion, no move steps) just leaves the instant board.
+   * measured against the render-time DOM BEFORE the final state renders.
+   * Each card flies ONE merged arc — its first leg's source to its last
+   * leg's destination, delayed at its first leg — so back-to-back legs
+   * (draw then fly, a run whose top continues onward) never blink as two
+   * sequential motions. The state update stays instant and authoritative:
+   * any abort (missing DOM hook, reduced motion, no move steps) just leaves
+   * the instant board.
    */
   const startFlights = (group: readonly Action[]) => {
     for (const timer of flightTimers.current) window.clearTimeout(timer)
@@ -217,9 +221,9 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
       return
     }
     // Pre-move position of every card that will fly, from the pre-setState
-    // DOM: a card's first leg starts where it sits now; later legs chain from
-    // the previous leg's computed destination — never a re-query (the DOM
-    // already shows the final layout by the time anything animates).
+    // DOM: a merged arc always starts where the card sits now (its first
+    // leg's origin) — never a re-query (the DOM already shows the final
+    // layout by the time anything animates).
     const domPos = new Map<string, { left: number; top: number }>()
     for (const step of steps) {
       for (const cardId of step.cardIds) {
@@ -234,9 +238,13 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
       }
     }
     const gen = ++flightsGen.current
-    const specs: FlightSpec[] = []
-    // Viewport spot each card occupies after its most recent leg.
+    // Per-step destination computation (unchanged): the viewport spot each
+    // card occupies after its most recent leg — flownTo's last write per
+    // card IS the final landing its merged arc aims at — plus each card's
+    // first/last leg steps.
     const flownTo = new Map<string, { left: number; top: number }>()
+    const firstLeg = new Map<string, number>()
+    const lastLeg = new Map<string, number>()
     for (let k = 0; k < steps.length; k++) {
       const step = steps[k]
       const slot = board.querySelector(`[data-pile-id="${step.toPile}"]`)
@@ -252,25 +260,43 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
       const run = step.cardIds.length
       for (let i = 0; i < run; i++) {
         const cardId = step.cardIds[i]
-        const src = flownTo.get(cardId) ?? domPos.get(cardId)
-        if (src === undefined) {
+        if (!firstLeg.has(cardId)) firstLeg.set(cardId, k)
+        lastLeg.set(cardId, k)
+        const left = rect.left
+        const top = rect.top + (step.landedOnCount - run + i) * fan
+        flownTo.set(cardId, { left, top })
+      }
+    }
+    // One spec per card, emitted at its FIRST leg: source = its measured
+    // pre-move spot, destination = its final landing. A run whose top card
+    // continues onward still splits: the run's other cards land at the
+    // tableau while the top card arcs straight to its final spot — the
+    // expected shape of a per-card merged arc.
+    const specs: FlightSpec[] = []
+    for (let k = 0; k < steps.length; k++) {
+      for (const cardId of steps[k].cardIds) {
+        if (firstLeg.get(cardId) !== k) continue // one arc, emitted once
+        const src = domPos.get(cardId)
+        const to = flownTo.get(cardId)
+        if (src === undefined || to === undefined) {
           setFlights(null) // Unmeasured card — unreachable, but never guess.
           return
         }
-        const left = rect.left
-        const top = rect.top + (step.landedOnCount - run + i) * fan
         specs.push({
           cardId,
           srcLeft: src.left,
           srcTop: src.top,
-          dx: left - src.left,
-          dy: top - src.top,
+          dx: to.left - src.left,
+          dy: to.top - src.top,
           delayMs: k * FLIGHT_STEP_MS,
         })
-        flownTo.set(cardId, { left, top })
       }
     }
-    setFlights({ gen, specs, stepCount: steps.length, settled: 0 })
+    // Board hiding is per card too: hidden until its LAST leg's settle timer
+    // fires (hideUntil[cardId] >= settled) — exactly when its arc lands.
+    const hideUntil: Record<string, number> = {}
+    for (const [cardId, leg] of lastLeg) hideUntil[cardId] = leg
+    setFlights({ gen, specs, hideUntil, stepCount: steps.length, settled: 0 })
     // One settle timer per step: leg k lands at k * STEP + FLIGHT ms. The gen
     // guard makes a stale chain a no-op against a newer overlay.
     for (let k = 0; k < steps.length; k++) {
@@ -318,9 +344,12 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
     if (recycle) commit(recycle.actions)
   }
 
-  /** Double-click quick-fly: the first legal foundation move for this run. */
+  /**
+   * Double-click smart move: the first legal foundation move, else the
+   * unique legal destination. Ambiguous positions move nothing.
+   */
   const quickFly = (from: PileId, count: number) => {
-    const g = foundationMove(groups, from, count, (id) => ROLES.get(id))
+    const g = quickMove(groups, from, count, (id) => ROLES.get(id))
     if (g) commit(g.actions)
   }
 
@@ -558,7 +587,7 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
         {klondikeDraw1.layout.map(renderPile)}
       </section>
 
-      {/* Cosmetic flight ghosts — one per card leg; clicks pass through. */}
+      {/* Cosmetic flight ghosts — one merged arc per card; clicks pass through. */}
       {flights !== null && (
         <div className="flight-layer" aria-hidden="true">
           {flights.specs.map((spec) => {
@@ -566,7 +595,7 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
             if (pc === undefined) return null
             return (
               <div
-                key={`${spec.cardId}-${spec.delayMs}`}
+                key={spec.cardId}
                 className="flight-card"
                 style={
                   {

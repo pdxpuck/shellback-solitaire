@@ -1,5 +1,7 @@
 /**
- * groupMoves + foundationMove suite (C3 batch B double-click quick-fly).
+ * groupMoves + foundationMove + quickMove suite (C3 batch B double-click
+ * quick-fly; v0.3.5 smartens it — foundation-first, else the unique legal
+ * destination).
  * Worlds come in the two flavors the other suites use: crafted rigs built
  * with engine primitives (as in flights.test.ts) for precise grouping and
  * null-case scenarios, and real deals via klondikeDraw1.deal where a natural
@@ -15,7 +17,7 @@ import type { Action, Card, PileId, Suit, World } from 'deckhand/engine'
 import type { PileRole } from 'deckhand/contract'
 import { cardId, createWorld, dealCards, replay } from 'deckhand/engine'
 import { klondikeDraw1 as game } from './definition'
-import { foundationMove, groupMoves, type MoveGroup } from './interaction'
+import { foundationMove, groupMoves, quickMove, type MoveGroup } from './interaction'
 
 // --- rig helpers (mirrors flights.test.ts) -----------------------------------
 
@@ -180,5 +182,84 @@ describe('foundationMove', () => {
       actions: [{ type: 'move', from: 't0', to: 't1', count: 1 }],
     }
     expect(foundationMove([decoy, first, second], 't0', 1, roleOf)).toBe(first)
+  })
+})
+
+// --- quickMove ---------------------------------------------------------------
+
+describe('quickMove', () => {
+  it('foundation-first: a foundation AND a tableau move on offer → the foundation group wins', () => {
+    // found-H = [HA] accepts the H2 and S3 also accepts it as a tableau
+    // landing — two distinct targets, and the fly must beat the shuffle.
+    const before = rig(up('found-H', [['H', 1]]), up('t0', [['H', 2]]), up('t1', [['S', 3]]))
+    const groups = groupMoves(game.legalMoves(before))
+    expect(groups).toHaveLength(2) // both destinations are live — not vacuous
+    expect(quickMove(groups, 't0', 1, roleOf)?.move).toEqual({
+      type: 'move',
+      from: 't0',
+      to: 'found-H',
+      count: 1,
+    })
+  })
+
+  it('a unique tableau destination → returned', () => {
+    // t0 = [H7u, S6u, H5u], t1 = [D7u]: the (t0, 2) run lands on t1 and
+    // nowhere else (empty foundations take aces only; empty tableaux kings),
+    // and a 2-card run never flies to a foundation.
+    const before = rig(
+      up('t0', [
+        ['H', 7],
+        ['S', 6],
+        ['H', 5],
+      ]),
+      up('t1', [['D', 7]]),
+    )
+    const groups = groupMoves(game.legalMoves(before))
+    expect(quickMove(groups, 't0', 2, roleOf)?.move).toEqual({
+      type: 'move',
+      from: 't0',
+      to: 't1',
+      count: 2,
+    })
+  })
+
+  it('two distinct tableau destinations → null (ambiguous; click-click disambiguates)', () => {
+    // H5 fits BOTH black sixes: (t0, 1) offers t1 and t2 — no unique
+    // destination, so a double-click must do nothing.
+    const before = rig(up('t0', [['H', 5]]), up('t1', [['S', 6]]), up('t2', [['C', 6]]))
+    const groups = groupMoves(game.legalMoves(before))
+    expect(groups).toHaveLength(2) // both destinations are live — not vacuous
+    expect(quickMove(groups, 't0', 1, roleOf)).toBeNull()
+  })
+
+  it('zero matching groups → null', () => {
+    // Seed 4: only (t2, 1) flies — asking for the 3-card run matches nothing.
+    const groups = groupMoves(game.legalMoves(game.deal('4')))
+    expect(quickMove(groups, 't2', 3, roleOf)).toBeNull()
+  })
+
+  it('a source ON a foundation → null, even though a unique pull-back is live', () => {
+    // found-S = [S2u], t0 = [H3u]: the pull is the only group, but a
+    // double-click on a foundation card must never auto-move it.
+    const before = rig(up('found-S', [['S', 2]]), up('t0', [['H', 3]]))
+    const groups = groupMoves(game.legalMoves(before))
+    expect(groups).toHaveLength(1) // the pull exists — the null is not vacuous
+    expect(quickMove(groups, 'found-S', 1, roleOf)).toBeNull()
+  })
+
+  it('duplicate groups pointing at the SAME destination → returned (unique target, not unique group)', () => {
+    // Real positions offer one group per target, so duplicates are crafted
+    // (mirrors foundationMove's ordering pin): candidates.length is 2 but
+    // targets.size is 1 — the FIRST group wins, and length-based logic
+    // would wrongly read this as ambiguous.
+    const first: MoveGroup = {
+      move: { type: 'move', from: 't0', to: 't1', count: 1 },
+      actions: [{ type: 'move', from: 't0', to: 't1', count: 1 }],
+    }
+    const second: MoveGroup = {
+      move: { type: 'move', from: 't0', to: 't1', count: 1 },
+      actions: [{ type: 'move', from: 't0', to: 't1', count: 1 }],
+    }
+    expect(quickMove([first, second], 't0', 1, roleOf)).toBe(first)
   })
 })

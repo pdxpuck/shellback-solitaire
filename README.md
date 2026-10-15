@@ -39,4 +39,4 @@ credits: [public/cards/byron/LICENSE.md](./public/cards/byron/LICENSE.md).
 
 C1 (v0.2.0) delivers the collection shell — landing page with the game catalog (metadata + summaries), theme settings, and the in-game screen skeleton; version convention is phase Cn → 0.n.x, same as deckhand's phase convention.
 
-Klondike (Draw-1) playable since v0.3.1. Deal numbers (game #) with replay-by-number since v0.3.2. Card-flight animation — sequenced 200 ms steps at a 220 ms cadence — since v0.3.3. Double-click-to-foundation quick-fly since v0.3.4.
+Klondike (Draw-1) playable since v0.3.1. Deal numbers (game #) with replay-by-number since v0.3.2. Card-flight animation — sequenced 200 ms steps at a 220 ms cadence — since v0.3.3. Double-click-to-foundation quick-fly since v0.3.4. Smart-move quick-fly (foundation-first, else the unique legal destination) + single-arc multi-leg flights since v0.3.5.
