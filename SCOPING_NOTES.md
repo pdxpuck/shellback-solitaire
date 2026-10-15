@@ -150,6 +150,9 @@ older mobile browsers at GameView mount (blank page) — replaced with index mat
 v0.3.14 + deckhand 0.4.5: react/react-dom out of deckhand's runtime dependencies —
 CI's separate deckhand npm ci produced a second React copy in the consumer bundle
 (null-useState crash at GameView mount); peers are the only runtime declaration now.
+v0.3.15: minified-bundle extraction proved TWO React module instances (deckhand chunk's
+me.useState vs app D.useState; the deckhand copy's dispatcher is never installed) —
+resolve.dedupe ['react','react-dom'] pins the app's copy.
 
 ### C3 batch C: drag-and-drop (2026-10-15, v0.3.9)
 - First deckhand useDrag consumer (0.4.2, click-compatible: onDragStart fires on EVERY

@@ -15,6 +15,11 @@ export default defineConfig({
   // (BASE_PATH=/ with solitaire.shellbackstudio.xyz).
   base: process.env.BASE_PATH ?? '/shellback-solitaire/',
   plugins: [react()],
+  resolve: {
+    // deckhand resolves its own react from its node_modules (devDep there);
+    // dedupe forces EVERY react import in the graph onto this app's single copy.
+    dedupe: ['react', 'react-dom'],
+  },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
