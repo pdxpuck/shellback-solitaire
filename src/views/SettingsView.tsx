@@ -1,11 +1,19 @@
 /**
  * SettingsView — card-theme selection (C1) + gameplay settings (C2:
- * auto-fly toggle), persisted via ../settings (loadSettings/saveSettings).
- * Footer shows the app version (injected as __APP_VERSION__ by Vite).
- * Win/loss stats: deliberately absent — no placeholder.
+ * auto-fly toggle; C3: card-flight speed), persisted via ../settings
+ * (loadSettings/saveSettings). Footer shows the app version (injected as
+ * __APP_VERSION__ by Vite). Win/loss stats: deliberately absent — no
+ * placeholder.
  */
 import { THEMES } from 'deckhand/renderer'
-import type { AppSettings } from '../settings'
+import type { AppSettings, FlightSpeed } from '../settings'
+
+/** Flight-speed radio choices in display order (values = settings ids). */
+const FLIGHT_SPEED_CHOICES: ReadonlyArray<{ value: FlightSpeed; label: string }> = [
+  { value: 'slow', label: 'Slow' },
+  { value: 'med', label: 'Medium' },
+  { value: 'fast', label: 'Fast' },
+]
 
 interface SettingsViewProps {
   settings: AppSettings
@@ -62,6 +70,27 @@ function SettingsView({ settings, onChange, onBack }: SettingsViewProps) {
           <div className="setting-text">
             <span className="setting-label">Auto-complete to foundations</span>
             <span className="setting-hint">Safe cards fly to the foundations automatically.</span>
+          </div>
+        </div>
+
+        <div className="setting-row">
+          <div className="setting-text">
+            <span className="setting-label">Card flight speed</span>
+            <span className="setting-hint">How fast cards fly across the table.</span>
+          </div>
+          <div className="speed-choices">
+            {FLIGHT_SPEED_CHOICES.map((choice) => (
+              <label key={choice.value} className="speed-choice">
+                <input
+                  type="radio"
+                  name="flight-speed"
+                  value={choice.value}
+                  checked={settings.flightSpeed === choice.value}
+                  onChange={() => onChange({ ...settings, flightSpeed: choice.value })}
+                />
+                {choice.label}
+              </label>
+            ))}
           </div>
         </div>
       </section>

@@ -9,8 +9,9 @@
  * (waste nonempty) recycles the waste; a click elsewhere deselects. Every
  * player click commits as ONE
  * moveGroup (rule actions + its safe flights when the settings autoFly
- * toggle is on) — which is exactly one undo group. The board is placed from
- * klondikeDraw1.layout on a 7-column CSS grid.
+ * toggle is on) — which is exactly one undo group. Flight pacing is a user
+ * setting too (slow/med/fast, default med — see FLIGHT_TIMING). The board
+ * is placed from klondikeDraw1.layout on a 7-column CSS grid.
  *
  * Card flights (C3) are purely cosmetic: commit applies the final state
  * instantly and authoritatively, and a fixed-position overlay flies ONE
@@ -31,6 +32,7 @@ import type { LayoutHint } from 'deckhand/contract'
 import type { CardTheme } from 'deckhand/renderer'
 import { CardView } from 'deckhand/renderer'
 import type { GameMeta } from '../games/registry'
+import type { FlightSpeed } from '../settings'
 import { klondikeDraw1 } from '../games/klondike/definition'
 import { groupMoves, quickMove } from '../games/klondike/interaction'
 import {
@@ -53,6 +55,8 @@ interface GameViewProps {
   onBack: () => void
   /** Settings toggle: safe cards fly to the foundations automatically. */
   autoFly: boolean
+  /** Settings pick: card-flight pace — slow, med (default), or fast. */
+  flightSpeed: FlightSpeed
 }
 
 const CARD_WIDTH = 90
@@ -62,10 +66,13 @@ const FAN_RATIO = 0.28
 const COLUMN_HEIGHT_LIMIT = 0.7
 /** Compressed piles never squeeze tighter than this many px per card. */
 const MIN_FAN_OFFSET = 16
-/** Flight cadence: each step's leg starts this long after the previous one. */
-const FLIGHT_STEP_MS = 220
-/** One flight leg's duration (matches the .flight-card CSS animation). */
-const FLIGHT_MS = 200
+
+/** Per-speed flight timing: one leg's duration + the start-to-start cadence. */
+const FLIGHT_TIMING: Record<FlightSpeed, { leg: number; step: number }> = {
+  slow: { leg: 400, step: 480 },
+  med: { leg: 280, step: 340 },
+  fast: { leg: 180, step: 220 },
+}
 
 /** Faint glyph on an empty foundation slot (presentation chrome only). */
 const FOUNDATION_GLYPHS: Partial<Record<PileId, string>> = {
@@ -118,7 +125,7 @@ interface FlightsState {
   readonly settled: number
 }
 
-function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
+function GameView({ meta, theme, onBack, autoFly, flightSpeed }: GameViewProps) {
   // A fresh visit resumes the saved game; none/corrupt → a fresh random deal.
   const [state, setState] = useState<GameState>(() =>
     loadGame() ?? initialState(String(randomDealNumber())),
@@ -144,6 +151,8 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
   const groups = groupMoves(klondikeDraw1.legalMoves(world))
 
   const cardHeight = Math.round(CARD_WIDTH * theme.ratio)
+  /** The active speed's flight timing: leg duration + start-to-start cadence. */
+  const timing = FLIGHT_TIMING[flightSpeed]
 
   /** Distinct drop targets for the current selection. */
   const targets = new Set<PileId>()
@@ -288,7 +297,7 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
           srcTop: src.top,
           dx: to.left - src.left,
           dy: to.top - src.top,
-          delayMs: k * FLIGHT_STEP_MS,
+          delayMs: k * timing.step,
         })
       }
     }
@@ -297,8 +306,9 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
     const hideUntil: Record<string, number> = {}
     for (const [cardId, leg] of lastLeg) hideUntil[cardId] = leg
     setFlights({ gen, specs, hideUntil, stepCount: steps.length, settled: 0 })
-    // One settle timer per step: leg k lands at k * STEP + FLIGHT ms. The gen
-    // guard makes a stale chain a no-op against a newer overlay.
+    // One settle timer per step: leg k lands at k * step + leg ms (the
+    // active flight timing). The gen guard makes a stale chain a no-op
+    // against a newer overlay.
     for (let k = 0; k < steps.length; k++) {
       const landed = k + 1
       flightTimers.current.push(
@@ -308,7 +318,7 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
               if (current === null || current.gen !== gen) return current
               return landed >= current.stepCount ? null : { ...current, settled: landed }
             }),
-          k * FLIGHT_STEP_MS + FLIGHT_MS,
+          k * timing.step + timing.leg,
         ),
       )
     }
@@ -603,7 +613,7 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
                     top: spec.srcTop,
                     width: CARD_WIDTH,
                     animationDelay: `${spec.delayMs}ms`,
-                    '--flight-dur': `${FLIGHT_MS}ms`,
+                    '--flight-dur': `${timing.leg}ms`,
                     '--dx': `${spec.dx}px`,
                     '--dy': `${spec.dy}px`,
                   } as CSSProperties

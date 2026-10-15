@@ -105,3 +105,6 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   replaces spec-derived hiding).
   (b) foundation-only quick-fly worked but felt unintuitive → quickMove: foundation-first,
   else the UNIQUE legal destination, ambiguous → nothing (click-click disambiguates).
+  (c) user asked for slower, user-adjustable animation speed → flightSpeed setting
+  (slow 400/480, med 280/340 default, fast 180/220 — leg/cadence ms); settings
+  validation restructured per-field (an unknown theme no longer wipes a valid autoFly).
