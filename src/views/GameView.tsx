@@ -654,6 +654,9 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
             <button type="button" className="primary-btn" onClick={newDeal}>
               New deal
             </button>
+            <button type="button" className="secondary-btn" onClick={onBack}>
+              Back to main
+            </button>
           </div>
         </div>
       )}

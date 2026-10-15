@@ -117,3 +117,11 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   (e) settings were reachable only from Home (v0.3.7): the game toolbar gains a
   Settings button (between Hint and Back to main); Back returns to wherever
   Settings was opened from — home or the game (origin-aware return target).
+  (f) win banner offered only "New deal" (v0.3.8): it gains a secondary
+  "Back to main" button (New deal stays primary).
+  (g) flying ghosts painted UNDER deep tableau piles (v0.3.8): root cause —
+  .fan-card zIndex equals the card's pile index (0..N, unbounded) and pile
+  slots never created stacking contexts, so fan-card z-indices competed
+  globally across the board; any pile deeper than ~6 cards painted above the
+  z-5 flight layer. Fix: .pile-slot gets isolation: isolate — card z becomes
+  pile-local and can no longer race the flight layer.

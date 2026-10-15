@@ -342,6 +342,10 @@ body {
 
 .pile-slot {
   position: relative;
+  /* Pile-local stacking — fan-card z-indices must not compete across piles
+     (a deep pile would otherwise paint above the z-5 flight layer during
+     flights). */
+  isolation: isolate;
   border: 1px dashed #bbb;
   border-radius: 6px;
   background: #f2f2f0;
