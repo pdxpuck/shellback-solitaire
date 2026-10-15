@@ -91,3 +91,11 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   landings use the landed fan offset (landedOnCount — new flightSteps field); multi-leg
   cards chain leg-to-leg and never re-query the DOM.
 - prefers-reduced-motion or any missing DOM hook skips flights entirely (instant fallback).
+
+### C3 batch B: double-click to foundation (2026-10-15, v0.3.4)
+- Double-click any playable card/run → the FIRST legal foundation move commits (quick-fly);
+  click-click is byte-identical; the stock keeps its exclusive click semantics (draw/recycle).
+- A foundation top card never flies FROM a foundation (rule in foundationMove) — pulling a
+  card back off a foundation stays a deliberate click-click.
+- groupMoves + MoveGroup extracted verbatim from GameView into games/klondike/interaction.ts,
+  joined by the pure foundationMove lookup — unit-tested in interaction.test.ts.

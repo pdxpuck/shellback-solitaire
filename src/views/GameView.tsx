@@ -1,9 +1,12 @@
 /**
- * GameView — the playable Klondike (Draw-1) screen (C2). Click-click UX:
- * click a face-up tableau card to select its run (or a waste/foundation top
- * card to select it), legal destinations highlight, click one to move.
- * A stock click draws; an empty-stock click (waste nonempty) recycles the
- * waste; a click elsewhere deselects. Every player click commits as ONE
+ * GameView — the playable Klondike (Draw-1) screen. Two interaction modes
+ * (C3): click-click — click a face-up tableau card to select its run (or a
+ * waste/foundation top card to select it), legal destinations highlight,
+ * click one to move — and double-click-to-foundation, which quick-flies the
+ * clicked card/run via the first legal foundation move (the stock keeps its
+ * exclusive click semantics). A stock click draws; an empty-stock click
+ * (waste nonempty) recycles the waste; a click elsewhere deselects. Every
+ * player click commits as ONE
  * moveGroup (rule actions + its safe flights when the settings autoFly
  * toggle is on) — which is exactly one undo group. The board is placed from
  * klondikeDraw1.layout on a 7-column CSS grid.
@@ -26,6 +29,7 @@ import type { CardTheme } from 'deckhand/renderer'
 import { CardView } from 'deckhand/renderer'
 import type { GameMeta } from '../games/registry'
 import { klondikeDraw1 } from '../games/klondike/definition'
+import { foundationMove, groupMoves } from '../games/klondike/interaction'
 import {
   clearGame,
   initialState,
@@ -107,32 +111,6 @@ interface FlightsState {
   readonly stepCount: number
   /** Steps that have fully landed so far (moved board cards unhide past theirs). */
   readonly settled: number
-}
-
-/** One legal player click: the move proper + any flip composed after it. */
-interface MoveGroup {
-  readonly move: Extract<Action, { type: 'move' }>
-  readonly actions: readonly Action[]
-}
-
-/**
- * Group the engine's flat legal-move list into player clicks. legalMoves
- * emits a flip only immediately after its own move, on the same source pile
- * (see movePlusFlip in the definition), so grouping is a single pass.
- */
-function groupMoves(moves: readonly Action[]): readonly MoveGroup[] {
-  const groups: MoveGroup[] = []
-  for (const action of moves) {
-    if (action.type === 'move') {
-      groups.push({ move: action, actions: [action] })
-    } else if (action.type === 'flip' && groups.length > 0) {
-      const last = groups[groups.length - 1]
-      if (last.move.from === action.pile) {
-        groups[groups.length - 1] = { ...last, actions: [...last.actions, action] }
-      }
-    }
-  }
-  return groups
 }
 
 function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
@@ -340,6 +318,12 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
     if (recycle) commit(recycle.actions)
   }
 
+  /** Double-click quick-fly: the first legal foundation move for this run. */
+  const quickFly = (from: PileId, count: number) => {
+    const g = foundationMove(groups, from, count, (id) => ROLES.get(id))
+    if (g) commit(g.actions)
+  }
+
   const newDeal = () => {
     cancelFlights()
     const fresh = initialState(String(randomDealNumber()))
@@ -456,6 +440,10 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
                 if (isTarget) drop(hint.pileId)
                 else if (pc.faceUp) setSelected({ pileId: hint.pileId, count: cards.length - i })
               }}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                quickFly(hint.pileId, cards.length - i)
+              }}
             >
               <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
             </div>
@@ -490,6 +478,10 @@ function GameView({ meta, theme, onBack, autoFly }: GameViewProps) {
               e.stopPropagation()
               if (isTarget) drop(hint.pileId)
               else if (top.faceUp) setSelected({ pileId: hint.pileId, count: 1 })
+            }}
+            onDoubleClick={(e) => {
+              e.stopPropagation()
+              quickFly(hint.pileId, 1)
             }}
           >
             <CardView card={top.card} faceUp={top.faceUp} theme={theme} width={CARD_WIDTH} />
