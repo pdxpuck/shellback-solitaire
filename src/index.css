@@ -7,6 +7,12 @@ body {
   color: #1a1a1a;
 }
 
+/* Classic casino felt green — the table-setting hook: future table presets /
+   unlockable tables override --felt instead of editing rules. */
+:root {
+  --felt: #35654d;
+}
+
 .shell {
   padding: 16px 24px 48px;
   max-width: 960px;
@@ -329,7 +335,18 @@ body {
 /* ---- game view: the board (C2) ---- */
 
 .game-screen {
-  padding-bottom: 24px;
+  background: var(--felt);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+/* White chrome on the felt (scoped so home/settings stay light). */
+.game-screen .home-header h1 {
+  color: #fff;
+}
+
+.game-screen .move-count {
+  color: #dce7e2;
 }
 
 .board {
@@ -346,9 +363,9 @@ body {
      (a deep pile would otherwise paint above the z-5 flight layer during
      flights). */
   isolation: isolate;
-  border: 1px dashed #bbb;
+  border: 1px dashed rgba(255, 255, 255, 0.4);
   border-radius: 6px;
-  background: #f2f2f0;
+  background: rgba(0, 0, 0, 0.14);
 }
 
 .pile-slot.clickable {
@@ -356,8 +373,8 @@ body {
 }
 
 .pile-slot.drop-target {
-  border: 2px solid #1e7b34;
-  background: #eaf5ec;
+  border: 2px solid #eaf5ec;
+  background: rgba(255, 255, 255, 0.16);
   cursor: pointer;
 }
 
@@ -389,7 +406,7 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 1.8rem;
-  color: #c4c4c0;
+  color: rgba(255, 255, 255, 0.45);
   user-select: none;
 }
 
