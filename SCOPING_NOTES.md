@@ -170,6 +170,10 @@ CB3 (v0.4.1): GameView generalized via a gameViews.ts config map (per-game defin
 
 Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table presets setting → unlockable tables earned by wins (chains to win-stats/D6).
 
+### Mobile pass + single-tap interaction (NEXT SESSION, user notes 2026-10-15, v0.4.1 live)
+- MOBILE SCALING: the site renders laptop-scale on a phone and overflows the screen. Known shape of the fix: CARD_WIDTH (90px) is a GameView constant and the board is a fixed 7-column grid — derive card size from the viewport/container (breakpoint or measured container width), responsive toolbar (wraps today), and verify the win overlay + settings on small screens. Test target: the user's phone via the live PWA.
+- SINGLE-TAP MOVE: double-tap quick-fly is awkward on touch — add single-tap auto-move (quick-fly semantics: foundation-first, else left-most) as an ADDITIONAL mode alongside tap-select/tap-destination and drag. Open design question for that session: how single-tap auto-move coexists with tap-to-select (e.g. always auto-move when any destination exists vs a settings toggle).
+
 ### C3 batch C: drag-and-drop (2026-10-15, v0.3.9)
 - First deckhand useDrag consumer (0.4.2, click-compatible: onDragStart fires on EVERY
   pointerdown, so the click/drag threshold is consumer territory) — a 6px press threshold
