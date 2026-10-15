@@ -25,7 +25,8 @@
  * their arc's settle timer fires. Any cancel (new commit, undo, new deal,
  * unmount) just snaps to the final layout. While an incoming card is in
  * flight (hidden on the board), its destination pile renders the topmost
- * VISIBLE card down — never blank.
+ * VISIBLE card down — never blank. A flipped card renders face-down until
+ * the flight that exposed it lands.
  *
  * Every deal carries a game # (the seed, 1..1,000,000): the toolbar shows it
  * (or "Practice deal" for legacy string seeds) and the "Play #" input
@@ -60,7 +61,7 @@ import {
   worldFor,
   type GameState,
 } from '../games/klondike/play'
-import { flightSteps } from './flights'
+import { flightPlan } from './flights'
 
 interface GameViewProps {
   meta: GameMeta
@@ -142,6 +143,9 @@ interface FlightsState {
   readonly specs: readonly FlightSpec[]
   /** cardId → its LAST leg's step index; the board hides the card until then. */
   readonly hideUntil: Readonly<Record<string, number>>
+  /** cardId → the step index of the move that EXPOSED its flip; the board
+   *  renders it face-down until that leg's settle timer fires. */
+  readonly revealAt: Readonly<Record<string, number>>
   readonly stepCount: number
   /** Steps that have fully landed so far (moved board cards unhide past theirs). */
   readonly settled: number
@@ -221,11 +225,20 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
 
   /** Cards whose flight arc has not landed yet — hidden on the board. */
   const hiddenCards = new Set<string>()
+  /** Cards whose EXPOSING flight has not landed yet — still rendered face-down. */
+  const unrevealedCards = new Set<string>()
   if (flights !== null) {
     for (const [cardId, lastLeg] of Object.entries(flights.hideUntil)) {
       if (lastLeg >= flights.settled) hiddenCards.add(cardId)
     }
+    for (const [cardId, revealStep] of Object.entries(flights.revealAt)) {
+      if (revealStep >= flights.settled) unrevealedCards.add(cardId)
+    }
   }
+
+  /** True while the card's exposing flight is still airborne — the board
+   *  renders it face-down until that leg lands (same >= gate as hiding). */
+  const unrevealed = (cardId: string): boolean => unrevealedCards.has(cardId)
 
   /** The dragged run's cards (render-time world) — the ghost's contents. */
   const dragRun: readonly PileCard[] =
@@ -309,7 +322,8 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
   const startFlights = (group: readonly Action[]) => {
     for (const timer of flightTimers.current) window.clearTimeout(timer)
     flightTimers.current = []
-    const steps = flightSteps(world, group)
+    const plan = flightPlan(world, group)
+    const steps = plan.steps
     if (
       steps.length === 0 ||
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -398,7 +412,14 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
     // fires (hideUntil[cardId] >= settled) — exactly when its arc lands.
     const hideUntil: Record<string, number> = {}
     for (const [cardId, leg] of lastLeg) hideUntil[cardId] = leg
-    setFlights({ gen, specs, hideUntil, stepCount: steps.length, settled: 0 })
+    setFlights({
+      gen,
+      specs,
+      hideUntil,
+      revealAt: plan.revealAt,
+      stepCount: steps.length,
+      settled: 0,
+    })
     // One settle timer per step: leg k lands at k * step + leg ms (the
     // active flight timing). The gen guard makes a stale chain a no-op
     // against a newer overlay.
@@ -676,39 +697,44 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
           style={cellStyle(hint, height)}
           onClick={isTarget ? () => drop(hint.pileId) : undefined}
         >
-          {cards.map((pc, i) => (
-            <div
-              key={pc.card.id}
-              data-card-id={pc.card.id}
-              className={
-                `fan-card${isTarget && i === cards.length - 1 ? ' drop-target' : ''}` +
-                `${selectedCount > 0 && i >= cards.length - selectedCount ? ' selected-run' : ''}` +
-                `${!isTarget && pc.faceUp ? ' selectable' : ''}`
-              }
-              {...(pc.faceUp ? dragHandle.bindings : {})}
-              style={{
-                ...(pc.faceUp ? dragHandle.bindings.style : {}),
-                top: i * offset,
-                zIndex: i,
-                ...(hiddenCards.has(pc.card.id) ? { visibility: 'hidden' as const } : {}),
-              }}
-              onClick={(e: ReactMouseEvent) => {
-                e.stopPropagation()
-                if (dragJustEnded.current) {
-                  dragJustEnded.current = false // swallow the click a drag emits
-                  return
+          {cards.map((pc, i) => {
+            // A flip not yet revealed by its exposing flight's landing renders
+            // face-down — not selectable, not a drag source, not click-select.
+            const faceUp = pc.faceUp && !unrevealed(pc.card.id)
+            return (
+              <div
+                key={pc.card.id}
+                data-card-id={pc.card.id}
+                className={
+                  `fan-card${isTarget && i === cards.length - 1 ? ' drop-target' : ''}` +
+                  `${selectedCount > 0 && i >= cards.length - selectedCount ? ' selected-run' : ''}` +
+                  `${!isTarget && faceUp ? ' selectable' : ''}`
                 }
-                if (isTarget) drop(hint.pileId)
-                else if (pc.faceUp) setSelected({ pileId: hint.pileId, count: cards.length - i })
-              }}
-              onDoubleClick={(e) => {
-                e.stopPropagation()
-                quickFly(hint.pileId, cards.length - i)
-              }}
-            >
-              <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
-            </div>
-          ))}
+                {...(faceUp ? dragHandle.bindings : {})}
+                style={{
+                  ...(faceUp ? dragHandle.bindings.style : {}),
+                  top: i * offset,
+                  zIndex: i,
+                  ...(hiddenCards.has(pc.card.id) ? { visibility: 'hidden' as const } : {}),
+                }}
+                onClick={(e: ReactMouseEvent) => {
+                  e.stopPropagation()
+                  if (dragJustEnded.current) {
+                    dragJustEnded.current = false // swallow the click a drag emits
+                    return
+                  }
+                  if (isTarget) drop(hint.pileId)
+                  else if (faceUp) setSelected({ pileId: hint.pileId, count: cards.length - i })
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  quickFly(hint.pileId, cards.length - i)
+                }}
+              >
+                <CardView card={pc.card} faceUp={faceUp} theme={theme} width={CARD_WIDTH} />
+              </div>
+            )
+          })}
         </div>
       )
     }

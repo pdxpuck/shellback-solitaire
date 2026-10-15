@@ -125,6 +125,19 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   globally across the board; any pile deeper than ~6 cards painted above the
   z-5 flight layer. Fix: .pile-slot gets isolation: isolate — card z becomes
   pile-local and can no longer race the flight layer.
+  (h) a move that exposed a face-down tableau card rendered the flip INSTANTLY —
+  the newly exposed card showed face-up while its uncovering card was still
+  mid-flight (v0.3.10). Fix: flips are now part of the flight plan — flightSteps
+  → flightPlan, which records revealAt (cardId → the step index of the move that
+  EXPOSED the flip); GameView renders that card face-down until the exposing
+  leg's settle timer fires (lift → land → THEN the reveal). An un-revealed card
+  is also unselectable and undraggable (visually face-down = behaves face-down).
+
+### Deployment intent (user, 2026-10-15)
+After the current bug round: publish via GitHub Pages — the repo is already
+standalone, so an Actions push-to-deploy workflow fits. Motivation: testing on
+a real mobile device. Optional later: a solitaire.shellbackstudio.xyz subdomain
+(same DNS pattern as shellback-studio-site).
 
 ### C3 batch C: drag-and-drop (2026-10-15, v0.3.9)
 - First deckhand useDrag consumer (0.4.2, click-compatible: onDragStart fires on EVERY
