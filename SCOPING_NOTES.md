@@ -108,3 +108,12 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   (c) user asked for slower, user-adjustable animation speed → flightSpeed setting
   (slow 400/480, med 280/340 default, fast 180/220 — leg/cadence ms); settings
   validation restructured per-field (an unknown theme no longer wipes a valid autoFly).
+  (d) flights BLANKED their destination pile while a card flew into it (v0.3.7 fix):
+  renderPile's waste/foundation branch rendered ONLY the pile's top card, so when
+  that top was the still-flying (hidden) incoming card nothing rendered until the arc
+  landed; the branch now renders the topmost VISIBLE card down (findLastIndex over
+  non-hidden cards, slice from there — hidden top keeps its data-card-id hook so
+  flight measurement still finds it).
+  (e) settings were reachable only from Home (v0.3.7): the game toolbar gains a
+  Settings button (between Hint and Back to main); Back returns to wherever
+  Settings was opened from — home or the game (origin-aware return target).

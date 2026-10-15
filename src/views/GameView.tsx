@@ -19,11 +19,16 @@
  * landing, even across back-to-back legs (a draw that continues onto a
  * foundation is one sweep) — while the moved board cards stay hidden until
  * their arc's settle timer fires. Any cancel (new commit, undo, new deal,
- * unmount) just snaps to the final layout.
+ * unmount) just snaps to the final layout. While an incoming card is in
+ * flight (hidden on the board), its destination pile renders the topmost
+ * VISIBLE card down — never blank.
  *
  * Every deal carries a game # (the seed, 1..1,000,000): the toolbar shows it
  * (or "Practice deal" for legacy string seeds) and the "Play #" input
  * replays any deal exactly by number.
+ *
+ * Settings is reachable from the toolbar; its Back returns to wherever it
+ * was opened from (the game — state survives via the per-commit save).
  */
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
@@ -57,6 +62,8 @@ interface GameViewProps {
   autoFly: boolean
   /** Settings pick: card-flight pace — slow, med (default), or fast. */
   flightSpeed: FlightSpeed
+  /** Open the Settings view; its Back returns to wherever it was opened. */
+  onOpenSettings: () => void
 }
 
 const CARD_WIDTH = 90
@@ -125,7 +132,7 @@ interface FlightsState {
   readonly settled: number
 }
 
-function GameView({ meta, theme, onBack, autoFly, flightSpeed }: GameViewProps) {
+function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }: GameViewProps) {
   // A fresh visit resumes the saved game; none/corrupt → a fresh random deal.
   const [state, setState] = useState<GameState>(() =>
     loadGame() ?? initialState(String(randomDealNumber())),
@@ -491,7 +498,10 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed }: GameViewProps) 
       )
     }
 
-    // Waste / foundation: the top card only.
+    // Waste / foundation: render the topmost VISIBLE card down — an incoming
+    // (still-flying, hidden) top card must never blank the pile (see header).
+    // Empty or all-hidden keeps the empty-slot fallback (foundation glyph).
+    const visibleIdx = cards.findLastIndex((pc) => !hiddenCards.has(pc.card.id))
     const selectedTop = selected !== null && selected.pileId === hint.pileId
     return (
       <div
@@ -501,30 +511,33 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed }: GameViewProps) 
         style={cellStyle(hint, cardHeight)}
         onClick={isTarget ? () => drop(hint.pileId) : undefined}
       >
-        {top !== null ? (
-          <div
-            data-card-id={top.card.id}
-            className={
-              `fan-card${isTarget ? ' drop-target' : ''}` +
-              `${selectedTop ? ' selected-run' : ''}` +
-              `${!isTarget && top.faceUp ? ' selectable' : ''}`
-            }
-            style={{
-              zIndex: 1,
-              ...(hiddenCards.has(top.card.id) ? { visibility: 'hidden' as const } : {}),
-            }}
-            onClick={(e: ReactMouseEvent) => {
-              e.stopPropagation()
-              if (isTarget) drop(hint.pileId)
-              else if (top.faceUp) setSelected({ pileId: hint.pileId, count: 1 })
-            }}
-            onDoubleClick={(e) => {
-              e.stopPropagation()
-              quickFly(hint.pileId, 1)
-            }}
-          >
-            <CardView card={top.card} faceUp={top.faceUp} theme={theme} width={CARD_WIDTH} />
-          </div>
+        {visibleIdx >= 0 ? (
+          cards.slice(visibleIdx).map((pc) => (
+            <div
+              key={pc.card.id}
+              data-card-id={pc.card.id}
+              className={
+                `fan-card${isTarget ? ' drop-target' : ''}` +
+                `${selectedTop ? ' selected-run' : ''}` +
+                `${!isTarget && pc.faceUp ? ' selectable' : ''}`
+              }
+              style={{
+                zIndex: 1,
+                ...(hiddenCards.has(pc.card.id) ? { visibility: 'hidden' as const } : {}),
+              }}
+              onClick={(e: ReactMouseEvent) => {
+                e.stopPropagation()
+                if (isTarget) drop(hint.pileId)
+                else if (pc.faceUp) setSelected({ pileId: hint.pileId, count: 1 })
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                quickFly(hint.pileId, 1)
+              }}
+            >
+              <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
+            </div>
+          ))
         ) : (
           role === 'foundation' && (
             <span className="slot-glyph" aria-hidden="true">
@@ -580,6 +593,9 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed }: GameViewProps) 
           </button>
           <button type="button" className="secondary-btn" disabled title="Hints arrive post-C2">
             Hint
+          </button>
+          <button type="button" className="secondary-btn" onClick={onOpenSettings}>
+            Settings
           </button>
           <button type="button" className="secondary-btn" onClick={onBack}>
             Back to main

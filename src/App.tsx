@@ -1,7 +1,8 @@
 /**
  * App — view switching (no router; simple view state) + settings/theme
  * ownership. Theme changes persist via ../settings and flow to every
- * CardView usage through the active view.
+ * CardView usage through the active view. Settings is reachable from Home
+ * or the game; its Back returns to the view it was opened from.
  */
 import { useState } from 'react'
 import type { CardTheme } from 'deckhand/renderer'
@@ -17,6 +18,8 @@ type View = { kind: 'home' } | { kind: 'settings' } | { kind: 'game'; gameId: st
 
 function App() {
   const [view, setView] = useState<View>({ kind: 'home' })
+  /** Where Settings' Back goes: the view it was opened from (home or game). */
+  const [settingsReturn, setSettingsReturn] = useState<View>({ kind: 'home' })
   const [settings, setSettings] = useState<AppSettings>(loadSettings)
 
   const theme: CardTheme = getTheme(settings.themeId)
@@ -26,11 +29,17 @@ function App() {
     saveSettings(next)
   }
 
+  /** Open Settings from the current view; Back returns there. */
+  const openSettings = () => {
+    setSettingsReturn(view)
+    setView({ kind: 'settings' })
+  }
+
   return (
     <main className="shell">
       {view.kind === 'home' && (
         <HomeView
-          onOpenSettings={() => setView({ kind: 'settings' })}
+          onOpenSettings={openSettings}
           onPlay={(gameId) => setView({ kind: 'game', gameId })}
         />
       )}
@@ -38,7 +47,7 @@ function App() {
         <SettingsView
           settings={settings}
           onChange={handleSettingsChange}
-          onBack={() => setView({ kind: 'home' })}
+          onBack={() => setView(settingsReturn)}
         />
       )}
       {view.kind === 'game' && (
@@ -48,6 +57,7 @@ function App() {
           autoFly={settings.autoFly}
           flightSpeed={settings.flightSpeed}
           onBack={() => setView({ kind: 'home' })}
+          onOpenSettings={openSettings}
         />
       )}
     </main>
