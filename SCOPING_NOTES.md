@@ -160,6 +160,8 @@ me.useState vs app D.useState; the deckhand copy's dispatcher is never installed
 resolve.dedupe ['react','react-dom'] pins the app's copy. v0.3.17 PWA: manifest/SW/icons/OG;
 SW scoped to the base path so sibling Pages sites are unaffected.
 
+Canfield (C3 proper) next: rules digest captured at docs/CANFIELD_RULES.md (Wikipedia, 2026-10-15); expected deckhand contract churn listed there.
+
 ### C3 batch C: drag-and-drop (2026-10-15, v0.3.9)
 - First deckhand useDrag consumer (0.4.2, click-compatible: onDragStart fires on EVERY
   pointerdown, so the click/drag threshold is consumer territory) — a 6px press threshold

@@ -91,12 +91,20 @@ const DRAG_FAN_OFFSET = 12
 /** Snap-back fallback: clear the drag if transitionend never fires. */
 const SNAP_BACK_MS = 160
 
-/** Per-speed flight timing: one leg's duration + the start-to-start cadence. */
+/** Per-speed flight timing: one leg's duration + the start-to-start cadence.
+ *  Both values are scaled by the ?slowmo multiplier (see SLOWMO). */
 const FLIGHT_TIMING: Record<FlightSpeed, { leg: number; step: number }> = {
   slow: { leg: 400, step: 480 },
   med: { leg: 280, step: 340 },
   fast: { leg: 180, step: 220 },
 }
+
+/** ?slowmo=N multiplies every flight timing (legs + cadence) by N — debug aid
+ *  for observing cascades. Defaults to 1 (no effect). Clamped to 1..10. */
+const SLOWMO = Math.min(
+  10,
+  Math.max(1, Number(new URLSearchParams(window.location.search).get('slowmo') ?? '1') || 1),
+)
 
 /** Faint glyph on an empty foundation slot (presentation chrome only). */
 const FOUNDATION_GLYPHS: Partial<Record<PileId, string>> = {
@@ -214,8 +222,12 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
   const groups = groupMoves(klondikeDraw1.legalMoves(world))
 
   const cardHeight = Math.round(CARD_WIDTH * theme.ratio)
-  /** The active speed's flight timing: leg duration + start-to-start cadence. */
-  const timing = FLIGHT_TIMING[flightSpeed]
+  /** The active speed's flight timing (leg + cadence), scaled by the ?slowmo
+   *  multiplier — every downstream use (spec delayMs, settle timers,
+   *  --flight-dur) derives from this one object. */
+  const timing = ((t) => ({ leg: t.leg * SLOWMO, step: t.step * SLOWMO }))(
+    FLIGHT_TIMING[flightSpeed],
+  )
 
   /** Distinct drop targets for the current selection. */
   const targets = new Set<PileId>()
