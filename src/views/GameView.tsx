@@ -27,7 +27,8 @@
  * unmount) just snaps to the final layout. While an incoming card is in
  * flight (hidden on the board), its destination pile renders the topmost
  * VISIBLE card down — never blank. A flipped card renders face-down until
- * the flight that exposed it lands.
+ * the flight that exposed it lands. Ghost stacking follows flight order —
+ * later flights paint above earlier ones.
  *
  * Every deal carries a game # (the seed, 1..1,000,000): the toolbar shows it
  * (or "Practice deal" for legacy string seeds) and the "Play #" input
@@ -146,6 +147,7 @@ interface FlightSpec {
   readonly dx: number
   readonly dy: number
   readonly delayMs: number
+  readonly zIndex: number
 }
 
 /** The active flight overlay: per-card arcs, settle progression, generation guard. */
@@ -404,6 +406,10 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
     // continues onward still splits: the run's other cards land at the
     // tableau while the top card arcs straight to its final spot — the
     // expected shape of a per-card merged arc.
+    // zIndex encodes the flight step (50 + k): later flights paint ABOVE
+    // earlier ones (a landed/holding ghost is covered by the next card
+    // flying onto the same pile, matching real stacking); within one step,
+    // run order is DOM order, which is correct bottom-to-top.
     const specs: FlightSpec[] = []
     for (let k = 0; k < steps.length; k++) {
       for (const cardId of steps[k].cardIds) {
@@ -421,6 +427,7 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
           dx: to.left - src.left,
           dy: to.top - src.top,
           delayMs: k * timing.step,
+          zIndex: 50 + k,
         })
       }
     }
@@ -905,6 +912,7 @@ function GameView({ meta, theme, onBack, autoFly, flightSpeed, onOpenSettings }:
                     left: spec.srcLeft,
                     top: spec.srcTop,
                     width: CARD_WIDTH,
+                    zIndex: spec.zIndex,
                     animationDelay: `${spec.delayMs}ms`,
                     '--flight-dur': `${timing.leg}ms`,
                     '--dx': `${spec.dx}px`,

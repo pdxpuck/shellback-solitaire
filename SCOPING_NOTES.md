@@ -137,6 +137,10 @@ Klondike (C2) is its first real implementation; expect the contract to churn.
   (left-most; ties → first group in order), and the stock is excluded as an
   auto-target (recycle stays a deliberate stock click; drag-drop onto the stock
   stays allowed — user-aimed).
+  (j) slow-mo screenshot (screenshots/, user) showed a later-flying ghost painted
+  UNDER an earlier ghost at a shared destination (v0.3.20) — ghost z now encodes
+  flight step: FlightSpec.zIndex = 50 + step, so later flights paint above
+  earlier ones (matching real stacking); within one step, DOM order is correct.
 
 ### Deployment (implemented, v0.3.11 — user intent 2026-10-15)
 Published via GitHub Pages — the repo is standalone, so an Actions
