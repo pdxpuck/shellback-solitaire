@@ -399,6 +399,10 @@ body {
   max-width: 960px;
   margin-left: auto;
   margin-right: auto;
+  /* The waste right-fan extends up to 28px past its slot; this padding
+     keeps it inside .board's box so the scroller never grows a horizontal
+     bar (v0.4.8). */
+  padding-right: 32px;
 }
 
 .pile-slot {
@@ -473,6 +477,19 @@ body {
   font-size: 1.8rem;
   color: rgba(255, 255, 255, 0.45);
   user-select: none;
+}
+
+/* Waste depth cue: thin card-edge strips peeking left of the fan — a thick
+   pile reads as thick (v0.4.8). */
+.waste-depth {
+  position: absolute;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-right: none;
+  border-radius: 3px 0 0 3px;
 }
 
 .move-count {

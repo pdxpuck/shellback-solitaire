@@ -414,13 +414,21 @@ function GameView({
         ROLES.get(step.toPile) === 'tableau'
           ? fanOffsetIn(step.landedOnCount, cardHeight, columnHeight)
           : 0
+      const wasteFan = ROLES.get(step.toPile) === 'waste'
       const run = step.cardIds.length
       for (let i = 0; i < run; i++) {
         const cardId = step.cardIds[i]
         if (!firstLeg.has(cardId)) firstLeg.set(cardId, k)
         lastLeg.set(cardId, k)
-        const left = rect.left
-        const top = rect.top + (step.landedOnCount - run + i) * fan
+        // Waste landings arrive at the card's FANNED position (v0.4.8):
+        // absolute fan index (landedOnCount - run + i) minus the fan window
+        // base (landedCount - 3, floored at 0) — the same slice index the
+        // board renders once the card is visible. Tableaux keep the vertical
+        // fan; waste fans horizontally only; other piles use the origin.
+        const landedIdx = step.landedOnCount - run + i
+        const fanLeft = wasteFan ? (landedIdx - Math.max(0, step.landedOnCount - 3)) * 14 : 0
+        const left = rect.left + fanLeft
+        const top = rect.top + landedIdx * fan
         flownTo.set(cardId, { left, top })
       }
     }
@@ -866,6 +874,16 @@ function GameView({
       }
     }
     const selectedTop = selected !== null && selected.pileId === hint.pileId
+    // Waste depth cue (v0.4.8, user design): the waste right-fans its top
+    // three cards (14px steps — the next two faces are readable) over
+    // left-edge depth slivers, so a thick pile reads as thick. Foundations
+    // stay stacked (their top is the only meaningful face). The fan window
+    // starts at-or-before the deepest VISIBLE card, so a pile mid-flight
+    // still renders topmost-visible-down (the never-blank contract above).
+    const isWaste = hint.pileId === 'waste'
+    const fanStart = isWaste
+      ? Math.max(0, Math.min(visibleIdx, cards.length - 3))
+      : visibleIdx
     return (
       <div
         key={hint.pileId}
@@ -875,49 +893,70 @@ function GameView({
         onClick={isTarget ? () => drop(hint.pileId) : undefined}
       >
         {visibleIdx >= 0 ? (
-          cards.slice(visibleIdx).map((pc) => {
-            // Only the pile's actual top card drags — a still-flying (hidden)
-            // top gets bindings but is unhit-testable while invisible.
-            const draggable = top !== null && pc === top && top.faceUp
-            return (
-              <div
-                key={pc.card.id}
-                data-card-id={pc.card.id}
-                className={
-                  `fan-card${isTarget ? ' drop-target' : ''}` +
-                  `${selectedTop ? ' selected-run' : ''}` +
-                  `${!isTarget && pc.faceUp ? ' selectable' : ''}`
-                }
-                {...(draggable ? dragHandle.bindings : {})}
-                style={{
-                  ...(draggable ? dragHandle.bindings.style : {}),
-                  zIndex: 1,
-                  ...(hiddenCards.has(pc.card.id) ? { visibility: 'hidden' as const } : {}),
-                }}
-                onClick={(e: ReactMouseEvent) => {
-                  e.stopPropagation()
-                  if (dragJustEnded.current) {
-                    dragJustEnded.current = false // swallow the click a drag emits
-                    return
+          <>
+            {isWaste && cards.length > 3 && (
+              <div className="waste-depth" style={{ left: -6 }} aria-hidden="true" />
+            )}
+            {isWaste && cards.length > 10 && (
+              <div className="waste-depth" style={{ left: -12 }} aria-hidden="true" />
+            )}
+            {cards.slice(fanStart).map((pc, k) => {
+              // Only the pile's actual top card drags — a still-flying (hidden)
+              // top gets bindings but is unhit-testable while invisible. In the
+              // waste fan, buried cards are VISUAL-ONLY — visible depth, but no
+              // bindings/click/chrome (they were never legal plays or targets;
+              // the stacked render simply made that unreachable). Foundations
+              // keep every card interactive (unchanged stacking behavior).
+              const isTop = pc === top
+              const interactive = !isWaste || isTop
+              const draggable = top !== null && isTop && top.faceUp
+              return (
+                <div
+                  key={pc.card.id}
+                  data-card-id={pc.card.id}
+                  className={
+                    interactive
+                      ? `fan-card${isTarget ? ' drop-target' : ''}` +
+                        `${selectedTop ? ' selected-run' : ''}` +
+                        `${!isTarget && pc.faceUp ? ' selectable' : ''}`
+                      : 'fan-card'
                   }
-                  if (isTarget) drop(hint.pileId)
-                  else if (pc.faceUp && singleTapMove) {
-                    // Single-tap move (v0.4.7), same fallback shape as the
-                    // fan branch: a stuck top card selects instead.
-                    if (!quickFly(hint.pileId, 1)) {
-                      setSelected({ pileId: hint.pileId, count: 1 })
-                    }
-                  } else if (pc.faceUp) setSelected({ pileId: hint.pileId, count: 1 })
-                }}
-                onDoubleClick={(e) => {
-                  e.stopPropagation()
-                  quickFly(hint.pileId, 1)
-                }}
-              >
-                <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
-              </div>
-            )
-          })
+                  {...(draggable ? dragHandle.bindings : {})}
+                  style={{
+                    ...(draggable ? dragHandle.bindings.style : {}),
+                    left: isWaste ? k * 14 : 0,
+                    zIndex: isWaste ? k + 1 : 1,
+                    ...(hiddenCards.has(pc.card.id) ? { visibility: 'hidden' as const } : {}),
+                  }}
+                  {...(interactive
+                    ? {
+                        onClick: (e: ReactMouseEvent) => {
+                          e.stopPropagation()
+                          if (dragJustEnded.current) {
+                            dragJustEnded.current = false // swallow the click a drag emits
+                            return
+                          }
+                          if (isTarget) drop(hint.pileId)
+                          else if (pc.faceUp && singleTapMove) {
+                            // Single-tap move (v0.4.7), same fallback shape as the
+                            // fan branch: a stuck top card selects instead.
+                            if (!quickFly(hint.pileId, 1)) {
+                              setSelected({ pileId: hint.pileId, count: 1 })
+                            }
+                          } else if (pc.faceUp) setSelected({ pileId: hint.pileId, count: 1 })
+                        },
+                        onDoubleClick: (e: ReactMouseEvent) => {
+                          e.stopPropagation()
+                          quickFly(hint.pileId, 1)
+                        },
+                      }
+                    : {})}
+                >
+                  <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
+                </div>
+              )
+            })}
+          </>
         ) : (
           role === 'foundation' && (
             <span className="slot-glyph" aria-hidden="true">
