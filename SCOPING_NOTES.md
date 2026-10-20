@@ -210,3 +210,8 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
 ### FOLLOW-UP (v0.4.4, user field feedback same day): slot chrome de-noised
 - User verdict on the live v0.4.3: "the full height columns look bad and when they get highlighted it is even worse... Seems very unnecessary."
 - Chrome now appears only where it carries information: filled fan piles paint NOTHING (the .pile-slot div stays as the invisible hit/geometry element flights measure); empty piles get card-sized dashed outlines (.cardbox); drop targets mark a card-sized landing outline (.drop-landing at top = cards.length * offset) instead of the lit-up column; the per-card drop-target shadow on fan piles is gone (the landing outline is the affordance). Stock/waste/foundation keep card-sized boxes (visible only when empty).
+
+### FOLLOW-UP (v0.4.5, user field feedback same day): fast flight speed re-tuned + visible slow-mo badge
+- User verdict on live v0.4.4: "even at the fastest setting the cards move painfully slow... that feature has lost its way over time."
+- Planner audit: FLIGHT_TIMING values are unchanged since the v0.3.6 tuning — the drift is CONTEXTAL: (a) fast was only ~1.55x med (imperceptible); (b) per-click waits are dominated by cascade length x cadence (one step per move action — auto-fly chains + reveal sequencing postdate the tuning); (c) ?slowmo=N multiplies all timings invisibly.
+- Fix: fast re-tuned 180/220 → 100/120 (~2.8x med; slow/med untouched); SLOWMO > 1 now renders a "slow-mo xN" badge in the game toolbar (amber pill) so a lingering debug param can never masquerade as a bug.

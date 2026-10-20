@@ -468,6 +468,16 @@ body {
   align-self: center;
 }
 
+/* Debug badge: shown in the game toolbar only when the ?slowmo URL param is
+   active — all flight timings are multiplied (amber pill, badge vocabulary). */
+.slowmo-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: #fff4d5;
+  color: #8a6100;
+}
+
 /* ---- game view: win overlay ---- */
 
 .win-overlay {

@@ -86,11 +86,14 @@ const DRAG_FAN_OFFSET = 12
 const SNAP_BACK_MS = 160
 
 /** Per-speed flight timing: one leg's duration + the start-to-start cadence.
- *  Both values are scaled by the ?slowmo multiplier (see SLOWMO). */
+ *  Both values are scaled by the ?slowmo multiplier (see SLOWMO). The fast
+ *  rung re-tuned v0.4.5: cadence-sequenced cascades made the old 180/220
+ *  rung (only ~1.55x med) imperceptible — fast is now ~2.8x med. Slow/med
+ *  are the user-tuned defaults and stay untouched. */
 const FLIGHT_TIMING: Record<FlightSpeed, { leg: number; step: number }> = {
   slow: { leg: 400, step: 480 },
   med: { leg: 280, step: 340 },
-  fast: { leg: 180, step: 220 },
+  fast: { leg: 100, step: 120 },
 }
 
 /** ?slowmo=N multiplies every flight timing (legs + cadence) by N — debug aid
@@ -956,6 +959,17 @@ function GameView({
           <span className="move-count">
             Moves: {state.moves.length}
           </span>
+          {/* Debug visibility: a lingering ?slowmo= URL param multiplies ALL
+              flight timings invisibly — surface it so it can never masquerade
+              as a speed bug. */}
+          {SLOWMO > 1 && (
+            <span
+              className="slowmo-badge"
+              title="Debug: ?slowmo is in the page URL — all flight timings are multiplied"
+            >
+              slow-mo ×{SLOWMO}
+            </span>
+          )}
         </div>
       </header>
 
