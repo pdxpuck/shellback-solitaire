@@ -43,7 +43,7 @@ added by working top to bottom.
 - [ ] Rig invariant honored: every crafted rig satisfies the game's structural invariants (LESSON, Canfield: every rig carries the found-0 base card — baseRank throws on empty by design, and any new enumeration path may reach it)
 - [ ] specialClick semantics verified (prefer draw from the clicked pile, else whole-pile flip-over — Klondike recycle and Canfield reserve refill both live here)
 
-## 7. Rules panel (v0.4.10+, in flight)
+## 7. Rules panel (shipped v0.4.10; per-game content is enforced by the gameViews config-invariant tests)
 - [ ] Player-facing rules text distilled from the digest
 - [ ] Pile labels for the layout diagram (reserve, working stacks, stock, waste, foundations — the user could not name the reserve; the panel is the fix)
 
