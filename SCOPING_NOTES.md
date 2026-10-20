@@ -240,3 +240,6 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
 - User report: could not name the reserve pile mid-game; directive: a Rules button showing the game's rules + the layout with pile names ("working stacks, stock, foundations, etc.").
 - Shipped: toolbar Rules button → overlay (backdrop/Esc/Close all dismiss) with player-facing rules content per game (gameViews config — CB3 presentation pattern) + a GENERATED layout diagram labeled from definition.layout + config.pileLabels (role-name fallback) — game-agnostic, so future games get it free (GAME_CHECKLIST section 7 carries the content gate, enforced by gameViews tests).
 - Sources: docs/CANFIELD_RULES.md digest; Klondike written fresh (standard draw-1).
+
+### FIX (v0.4.11): foundation glyph showed the raw rank integer
+- User report: the base-rank glyph read '11' for J and '1' for A. The glyph rendered baseRank(world) raw. Now labeled via deckhand's exported RANK_LABELS (display labels indexed by rank — the deckhand route of the two the fix spec allowed, so no local map and no new test; it is deckhand's tested surface).

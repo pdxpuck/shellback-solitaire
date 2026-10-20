@@ -21,6 +21,7 @@
 
 import type { GameDefinition } from 'deckhand/contract'
 import type { Action, PileId, World } from 'deckhand/engine'
+import { RANK_LABELS } from 'deckhand/engine'
 import { baseRank, canfield } from './canfield/definition'
 import * as canfieldPlay from './canfield/play'
 import { klondikeDraw1 } from './klondike/definition'
@@ -212,8 +213,10 @@ const KLONDIKE_VIEW: GameViewConfig = {
 const CANFIELD_VIEW: GameViewConfig = {
   definition: canfield,
   session: canfieldSession,
-  // Every empty foundation opens with the base rank (any suit) — show it.
-  emptyFoundationGlyph: (world) => `${baseRank(world)}`,
+  // Every empty foundation opens with the base rank (any suit) — show it,
+  // LABELED (A/2..10/J/Q/K, deckhand's RANK_LABELS is indexed by rank), not
+  // the raw integer (v0.4.11: '11' for J / '1' for A).
+  emptyFoundationGlyph: (world) => RANK_LABELS[baseRank(world)],
   rules: CANFIELD_RULES,
   pileLabels: CANFIELD_PILE_LABELS,
 }
