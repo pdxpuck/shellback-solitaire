@@ -903,7 +903,12 @@ function GameView({
   }
 
   return (
-    <div className="game-screen" onClick={deselect}>
+    <div
+      className="game-screen"
+      onClick={deselect}
+      // Native drag ghost backstop — CSS user-drag first, this catches the rest.
+      onDragStart={(e) => e.preventDefault()}
+    >
       <header className="home-header">
         <h1>{meta.title}</h1>
         <div className="toolbar">

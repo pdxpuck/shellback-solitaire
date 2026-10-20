@@ -350,6 +350,19 @@ body {
   border-radius: 0;
   padding: 16px 24px;
   background: var(--felt);
+  /* v0.4.6: the browser's own selection machinery is OFF-LIMITS here —
+     text selection, native image drag, and tap flash have all been
+     mistaken for game features. The app's own .selected-run highlight
+     is unaffected. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.game-screen img,
+.game-screen svg {
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 
 /* The pinned toolbar row: flex-none, never scrolls away. */

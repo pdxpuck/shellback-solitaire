@@ -215,3 +215,8 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
 - User verdict on live v0.4.4: "even at the fastest setting the cards move painfully slow... that feature has lost its way over time."
 - Planner audit: FLIGHT_TIMING values are unchanged since the v0.3.6 tuning — the drift is CONTEXTAL: (a) fast was only ~1.55x med (imperceptible); (b) per-click waits are dominated by cascade length x cadence (one step per move action — auto-fly chains + reveal sequencing postdate the tuning); (c) ?slowmo=N multiplies all timings invisibly.
 - Fix: fast re-tuned 180/220 → 100/120 (~2.8x med; slow/med untouched); SLOWMO > 1 now renders a "slow-mo xN" badge in the game toolbar (amber pill) so a lingering debug param can never masquerade as a bug.
+
+### FOLLOW-UP (v0.4.6, user field feedback same day): native highlight artifacts suppressed
+- User report: missing a card and clicking the felt sometimes "highlights" content that persists until the next felt click.
+- Diagnosis: the app's selection state clears on felt click by design (onClick=deselect), so the persistent highlight is browser-native — text selection from click-drag/double-click, or the native image-drag ghost. The user directive: remove the ability to highlight at all from mouse actions (game view only).
+- Fix: user-select none + tap-highlight transparent on .game-screen; native img/svg drag disabled (CSS) + onDragStart preventDefault backstop on the game-screen root. The app's .selected-run interaction highlight is unaffected.
