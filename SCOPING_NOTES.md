@@ -235,3 +235,8 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
 ### FIX (v0.4.9): Canfield reserve rendered as a squared stack (layout top-heavy)
 - User report: the most-handled cards (working stacks) sat at the bottom of the screen below a wall of green — the reserve's 13-card down-fan made its box the tallest slot, and the v0.4.3 constant-box rule made that height permanent, pinning row 1 below the fold.
 - Fix: the reserve renders as a squared stack (real-Canfield look): offset 0, cardHeight box, top face-up (existing override), .waste-depth slivers at >3/>10 cards, ↻ glyph on the empty refill click. Row 0 is now one card tall — the whole board fits on screen. Zero rule-interaction changes (the covered cards' handlers were already unreachable); .board gains padding-left 16px so the slivers stay in-box.
+
+### FEATURE (v0.4.10): in-game rules panel (user-directed)
+- User report: could not name the reserve pile mid-game; directive: a Rules button showing the game's rules + the layout with pile names ("working stacks, stock, foundations, etc.").
+- Shipped: toolbar Rules button → overlay (backdrop/Esc/Close all dismiss) with player-facing rules content per game (gameViews config — CB3 presentation pattern) + a GENERATED layout diagram labeled from definition.layout + config.pileLabels (role-name fallback) — game-agnostic, so future games get it free (GAME_CHECKLIST section 7 carries the content gate, enforced by gameViews tests).
+- Sources: docs/CANFIELD_RULES.md digest; Klondike written fresh (standard draw-1).

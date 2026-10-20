@@ -110,6 +110,16 @@ const SLOWMO = Math.min(
   Math.max(1, Number(new URLSearchParams(window.location.search).get('slowmo') ?? '1') || 1),
 )
 
+/** Generic pile name per role — the rules-diagram label fallback when the
+ *  game config carries no explicit name for a pile id (v0.4.10). */
+const ROLE_NAMES: Record<string, string> = {
+  stock: 'Stock',
+  waste: 'Waste',
+  reserve: 'Reserve',
+  foundation: 'Foundation',
+  tableau: 'Working stack',
+}
+
 /**
  * The deal # for a seed, when the seed is numeric: Number() parses it and
  * round-trips back to the exact same string. Legacy seeds (arbitrary
@@ -197,6 +207,8 @@ function GameView({
   /** Deal-jump input: the typed number + whether the last parse was invalid. */
   const [dealInput, setDealInput] = useState('')
   const [dealInvalid, setDealInvalid] = useState(false)
+  /** Rules panel visibility (v0.4.10). */
+  const [showRules, setShowRules] = useState(false)
   const dealInvalidTimer = useRef<number | null>(null)
   /** The board section — the DOM hooks flights measure against. */
   const boardRef = useRef<HTMLElement | null>(null)
@@ -234,6 +246,11 @@ function GameView({
 
   /** Pile id → layout column, from the game definition's layout hints. */
   const LAYOUT_COL = new Map(definition.layout.map((hint) => [hint.pileId, hint.col]))
+
+  // Rules-diagram geometry (v0.4.10): derived from the definition's own
+  // layout hints — game-agnostic by construction.
+  const mapCols = 1 + Math.max(...definition.layout.map((hint) => hint.col))
+  const mapRows = 1 + Math.max(...definition.layout.map((hint) => hint.row))
 
   const cardHeight = Math.round(CARD_WIDTH * theme.ratio)
   // The fan box: constant for this view's lifetime. Captured ONCE from the
@@ -310,6 +327,17 @@ function GameView({
     },
     [],
   )
+
+  // Esc closes the rules panel while it is open (v0.4.10); the listener
+  // rides showRules so it exists only when it can act.
+  useEffect(() => {
+    if (!showRules) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowRules(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showRules])
 
   const deselect = () => setSelected(null)
 
@@ -1038,6 +1066,9 @@ function GameView({
           <button type="button" className="secondary-btn" disabled title="Hints arrive post-C2">
             Hint
           </button>
+          <button type="button" className="secondary-btn" onClick={() => setShowRules(true)}>
+            Rules
+          </button>
           <button type="button" className="secondary-btn" onClick={onOpenSettings}>
             Settings
           </button>
@@ -1139,6 +1170,51 @@ function GameView({
             <button type="button" className="secondary-btn" onClick={onBack}>
               Back to main
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rules panel (v0.4.10): player-facing content from the game config +
+          a layout diagram GENERATED from definition.layout + pile labels —
+          backdrop click, Close, and Esc all dismiss it. */}
+      {showRules && (
+        <div className="rules-overlay" onClick={() => setShowRules(false)}>
+          <div className="rules-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="rules-head">
+              <h2>How to play {meta.title}</h2>
+              <button type="button" className="secondary-btn" onClick={() => setShowRules(false)}>
+                Close
+              </button>
+            </div>
+            <div
+              className="rules-map"
+              style={{
+                gridTemplateColumns: `repeat(${mapCols}, 44px)`,
+                gridTemplateRows: `repeat(${mapRows}, auto)`,
+              }}
+            >
+              {definition.layout.map((hint) => {
+                const role = ROLES.get(hint.pileId) ?? ''
+                const label = config.pileLabels[hint.pileId] ?? ROLE_NAMES[role] ?? hint.pileId
+                return (
+                  <div key={hint.pileId} style={{ gridColumn: hint.col + 1, gridRow: hint.row + 1 }}>
+                    <div className={`rules-cell rules-${role}`} aria-label={label} />
+                    <span className="rules-label">{label}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="rules-intro">{config.rules.intro}</p>
+            {config.rules.sections.map((s) => (
+              <div key={s.heading} className="rules-section">
+                <h3>{s.heading}</h3>
+                <ul>
+                  {s.items.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
         </div>
       )}
