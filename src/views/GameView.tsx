@@ -702,7 +702,10 @@ function GameView({
     const cards = world.piles[hint.pileId].cards
     const top = cards.length > 0 ? cards[cards.length - 1] : null
     const isTarget = targets.has(hint.pileId)
-    const slotClass = `pile-slot${isTarget ? ' drop-target' : ''}`
+    // Waste/foundation slots: always card-sized boxes (cardbox), highlight as
+    // drop targets. Fan piles build their own class (chrome only when empty —
+    // see below); the stock branch likewise carries its own template.
+    const slotClass = `pile-slot cardbox${isTarget ? ' drop-target' : ''}`
 
     // Stock: click = draw (cards) or, when empty with the waste nonempty,
     // the whole-pile flip-over recycle into the stock (specialClick).
@@ -712,7 +715,7 @@ function GameView({
         <div
           key={hint.pileId}
           data-pile-id={hint.pileId}
-          className={`pile-slot${clickable ? ' clickable' : ''}`}
+          className={`pile-slot cardbox${clickable ? ' clickable' : ''}`}
           style={cellStyle(hint, cardHeight)}
           onClick={clickable ? () => specialClick(hint.pileId) : undefined}
         >
@@ -753,16 +756,35 @@ function GameView({
       const offset = fanOffsetIn(cards.length, cardHeight, columnHeight)
       const height = cards.length === 0 ? cardHeight : columnHeight
       const selectedCount = selected !== null && selected.pileId === hint.pileId ? selected.count : 0
-      const emptyReserveClick =
-        role === 'reserve' && cards.length === 0 ? () => specialClick(hint.pileId) : undefined
+      // Boolean twin of emptyReserveClick for the className: the className
+      // expression must not reference the function itself, or the
+      // react-hooks/refs analysis treats its commit chain (which reads
+      // boardRef) as render-path code and flags the render call site.
+      const emptyReserve = role === 'reserve' && cards.length === 0
+      const emptyReserveClick = emptyReserve ? () => specialClick(hint.pileId) : undefined
+      // Chrome only where it carries information: a filled fan pile paints
+      // NOTHING (the .pile-slot div stays as the invisible hit/geometry
+      // element flights measure); an empty one shows the classic card-sized
+      // outline; the empty reserve keeps a pointer cursor on its refill
+      // click, matching the stock branch.
       return (
         <div
           key={hint.pileId}
           data-pile-id={hint.pileId}
-          className={slotClass}
+          className={`pile-slot${cards.length === 0 ? ' cardbox' : ''}${emptyReserve ? ' clickable' : ''}`}
           style={cellStyle(hint, height)}
           onClick={isTarget ? () => drop(hint.pileId) : emptyReserveClick}
         >
+          {/* Drop-target landing outline: card-sized, at the attachment point
+              (top = cards.length * offset) — marks where the dropped card
+              lands without lighting up the whole column. */}
+          {isTarget && (
+            <div
+              className="drop-landing"
+              style={{ top: cards.length * offset, height: cardHeight }}
+              aria-hidden="true"
+            />
+          )}
           {cards.map((pc, i) => {
             // A flip not yet revealed by its exposing flight's landing renders
             // face-down — not selectable, not a drag source, not click-select.
@@ -775,7 +797,7 @@ function GameView({
                 key={pc.card.id}
                 data-card-id={pc.card.id}
                 className={
-                  `fan-card${isTarget && i === cards.length - 1 ? ' drop-target' : ''}` +
+                  `fan-card` +
                   `${selectedCount > 0 && i >= cards.length - selectedCount ? ' selected-run' : ''}` +
                   `${!isTarget && faceUp ? ' selectable' : ''}`
                 }

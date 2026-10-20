@@ -394,19 +394,40 @@ body {
      (a deep pile would otherwise paint above the z-5 flight layer during
      flights). */
   isolation: isolate;
-  border: 1px dashed rgba(255, 255, 255, 0.4);
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.14);
+  /* No border/background here: pile chrome is opt-in via .cardbox — visible
+     only where it carries information (v0.4.4 de-noise). */
 }
 
 .pile-slot.clickable {
   cursor: pointer;
 }
 
-.pile-slot.drop-target {
+/* Card-sized chrome: empty-slot outlines + stock/waste/foundation boxes.
+   Visible only where it carries information — a card covers its own box,
+   so filled card-height piles show no chrome. */
+.pile-slot.cardbox {
+  border: 1px dashed rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.pile-slot.cardbox.drop-target {
   border: 2px solid #eaf5ec;
   background: rgba(255, 255, 255, 0.16);
   cursor: pointer;
+}
+
+/* Drop-target landing outline on fan piles: card-sized, at the attachment
+   point (top = cards.length * fan offset) — marks where the dropped card
+   lands without lighting up the whole column. */
+.drop-landing {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border: 2px solid #eaf5ec;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  pointer-events: none;
 }
 
 .fan-card {
