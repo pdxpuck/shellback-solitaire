@@ -403,6 +403,10 @@ body {
      keeps it inside .board's box so the scroller never grows a horizontal
      bar (v0.4.8). */
   padding-right: 32px;
+  /* The reserve's depth slivers extend 12px left of the first column; this
+     keeps them inside .board's box — symmetric with the right-side fan
+     padding (v0.4.9). */
+  padding-left: 16px;
 }
 
 .pile-slot {
@@ -479,8 +483,9 @@ body {
   user-select: none;
 }
 
-/* Waste depth cue: thin card-edge strips peeking left of the fan — a thick
-   pile reads as thick (v0.4.8). */
+/* Pile depth cue (generic — waste fan AND reserve stack): thin card-edge
+   strips peeking left of the pile — a thick pile reads as thick (v0.4.8/
+   v0.4.9). */
 .waste-depth {
   position: absolute;
   top: 0;

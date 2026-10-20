@@ -778,8 +778,12 @@ function GameView({
       // view. Empty boxes stay card-sized; the box takes full column height
       // on the FIRST card and then never changes — one stable jump per pile,
       // never per move. The fan compresses inside the box as the pile grows.
-      const offset = fanOffsetIn(cards.length, cardHeight, columnHeight)
-      const height = cards.length === 0 ? cardHeight : columnHeight
+      // RESERVE EXCEPTION (v0.4.9): the reserve STACKS (offset 0, cardHeight
+      // box, real-Canfield squared look) so row 0 stays one card tall — the
+      // 13-card down-fan box pinned the working stacks below the fold.
+      const isReserve = role === 'reserve'
+      const offset = isReserve ? 0 : fanOffsetIn(cards.length, cardHeight, columnHeight)
+      const height = cards.length === 0 ? cardHeight : isReserve ? cardHeight : columnHeight
       const selectedCount = selected !== null && selected.pileId === hint.pileId ? selected.count : 0
       // Boolean twin of emptyReserveClick for the className: the className
       // expression must not reference the function itself, or the
@@ -800,6 +804,15 @@ function GameView({
           style={cellStyle(hint, height)}
           onClick={isTarget ? () => drop(hint.pileId) : emptyReserveClick}
         >
+          {/* Reserve depth slivers (v0.4.9): the squared stack shows its bulk
+              via the same edge strips the waste fan uses — first children, so
+              they paint behind the stack. */}
+          {isReserve && cards.length > 3 && (
+            <div className="waste-depth" style={{ left: -6 }} aria-hidden="true" />
+          )}
+          {isReserve && cards.length > 10 && (
+            <div className="waste-depth" style={{ left: -12 }} aria-hidden="true" />
+          )}
           {/* Drop-target landing outline: card-sized, at the attachment point
               (top = cards.length * offset) — marks where the dropped card
               lands without lighting up the whole column. */}
@@ -858,6 +871,13 @@ function GameView({
               </div>
             )
           })}
+          {/* Empty-reserve refill affordance (v0.4.9), matching the stock's
+              glyph: discoverable only when the waste can actually refill it. */}
+          {cards.length === 0 && role === 'reserve' && world.piles.waste.cards.length > 0 && (
+            <span className="slot-glyph" aria-label="Refill the reserve">
+              ↻
+            </span>
+          )}
         </div>
       )
     }
