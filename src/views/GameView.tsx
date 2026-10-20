@@ -21,7 +21,10 @@
  * moveGroup (rule actions + its safe flights when the settings autoFly
  * toggle is on) — which is exactly one undo group. Flight pacing is a user
  * setting too (slow/med/fast, default med — see FLIGHT_TIMING). The board
- * is placed from definition.layout on a CSS grid.
+ * is placed from definition.layout on a CSS grid. Fan geometry is constant
+ * per view (layout.ts) — fans compress inside their box — and the felt is
+ * the full window surface (the header stays pinned; the board scrolls
+ * internally).
  *
  * Card flights (C3) are purely cosmetic: commit applies the final state
  * instantly and authoritatively, and a fixed-position overlay flies ONE
@@ -57,6 +60,7 @@ import type { FlightSpeed } from '../settings'
 import { groupMoves, quickMove } from '../games/gameViews'
 import type { GameViewConfig, GameState } from '../games/gameViews'
 import { flightPlan } from './flights'
+import { columnHeightFor, fanOffsetIn } from './layout'
 
 interface GameViewProps {
   /** The per-game view config (definition + session + presentation glue). */
@@ -73,12 +77,6 @@ interface GameViewProps {
 }
 
 const CARD_WIDTH = 90
-/** Per-card fan offset as a fraction of card height. */
-const FAN_RATIO = 0.28
-/** A tableau column stays ≤ ~70vh — taller piles compress their fan. */
-const COLUMN_HEIGHT_LIMIT = 0.7
-/** Compressed piles never squeeze tighter than this many px per card. */
-const MIN_FAN_OFFSET = 16
 
 /** Press-to-drag threshold: a press moving beyond this many px is a drag. */
 const DRAG_THRESHOLD_PX = 6
@@ -110,14 +108,6 @@ const SLOWMO = Math.min(
 function dealNumberOf(seed: string): number | null {
   const n = Number(seed)
   return Number.isInteger(n) && String(n) === seed ? n : null
-}
-
-/** Fan offset for a pile of `count` cards, compressing toward the ~70vh cap. */
-function fanOffset(count: number, cardHeight: number): number {
-  if (count <= 1) return 0
-  const base = cardHeight * FAN_RATIO
-  const cap = (window.innerHeight * COLUMN_HEIGHT_LIMIT - cardHeight) / (count - 1)
-  return Math.min(base, Math.max(cap, MIN_FAN_OFFSET))
 }
 
 /** One card's flight leg: viewport source position + delta to its landing spot. */
@@ -235,6 +225,10 @@ function GameView({
   const LAYOUT_COL = new Map(definition.layout.map((hint) => [hint.pileId, hint.col]))
 
   const cardHeight = Math.round(CARD_WIDTH * theme.ratio)
+  // The fan box: constant for this view's lifetime. Captured ONCE from the
+  // viewport at mount — viewport changes mid-game must not reflow piles
+  // (layout.ts contract: no window reads during render).
+  const [columnHeight] = useState(() => columnHeightFor(window.innerHeight, cardHeight))
   /** The active speed's flight timing (leg + cadence), scaled by the ?slowmo
    *  multiplier — every downstream use (spec delayMs, settle timers,
    *  --flight-dur) derives from this one object. */
@@ -406,7 +400,9 @@ function GameView({
       // Tableaux land the run at its final fan indices (the landed count sets
       // the fan); other piles land the top card at the slot origin.
       const fan =
-        ROLES.get(step.toPile) === 'tableau' ? fanOffset(step.landedOnCount, cardHeight) : 0
+        ROLES.get(step.toPile) === 'tableau'
+          ? fanOffsetIn(step.landedOnCount, cardHeight, columnHeight)
+          : 0
       const run = step.cardIds.length
       for (let i = 0; i < run; i++) {
         const cardId = step.cardIds[i]
@@ -750,8 +746,12 @@ function GameView({
     // selects or drags; deeper cards stay face-down chrome. The empty
     // reserve's slot click is its whole-pile refill (specialClick).
     if (hint.fan === 'down') {
-      const offset = fanOffset(cards.length, cardHeight)
-      const height = cardHeight + (cards.length - 1) * offset
+      // Fixed-box fan model (layout.ts): the slot box is CONSTANT for the
+      // view. Empty boxes stay card-sized; the box takes full column height
+      // on the FIRST card and then never changes — one stable jump per pile,
+      // never per move. The fan compresses inside the box as the pile grows.
+      const offset = fanOffsetIn(cards.length, cardHeight, columnHeight)
+      const height = cards.length === 0 ? cardHeight : columnHeight
       const selectedCount = selected !== null && selected.pileId === hint.pileId ? selected.count : 0
       const emptyReserveClick =
         role === 'reserve' && cards.length === 0 ? () => specialClick(hint.pileId) : undefined
@@ -937,9 +937,13 @@ function GameView({
         </div>
       </header>
 
-      <section className="board" ref={boardRef} aria-label={`${meta.title} table`}>
-        {definition.layout.map(renderPile)}
-      </section>
+      {/* The board scrolls INTERNALLY inside the fixed felt surface — the
+          green never resizes; the header above stays pinned. */}
+      <div className="board-scroll">
+        <section className="board" ref={boardRef} aria-label={`${meta.title} table`}>
+          {definition.layout.map(renderPile)}
+        </section>
+      </div>
 
       {/* Cosmetic flight ghosts — one merged arc per card; clicks pass through. */}
       {flights !== null && (

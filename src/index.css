@@ -335,9 +335,34 @@ body {
 /* ---- game view: the board (C2) ---- */
 
 .game-screen {
+  /* The felt IS the page surface in a game view: fixed full-viewport, no
+     radius, header pinned, board scrolling INTERNALLY — the table never
+     sizes to its content (the v0.4.3 felt-resizing fix). Legacy browsers
+     get 100vh; modern ones get 100dvh so phone URL-bar show/hide is
+     absorbed by the surface instead of resizing the table. */
+  position: fixed;
+  inset: 0;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 0;
+  padding: 16px 24px;
   background: var(--felt);
-  border-radius: 12px;
-  padding: 16px;
+}
+
+/* The pinned toolbar row: flex-none, never scrolls away. */
+.game-screen .home-header {
+  flex: none;
+}
+
+/* Internal board scroller — the flex equivalent of height:100vh inside the
+   fixed inset surface; scrolling reveals only more green. */
+.board-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* White chrome on the felt (scoped so home/settings stay light). */
@@ -355,6 +380,12 @@ body {
   gap: 16px 12px;
   margin-top: 16px;
   align-items: start;
+  /* The familiar centered ~960px column — the shell no longer constrains
+     the game view (the felt is the full window), so the board carries its
+     own width + auto margins. */
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .pile-slot {
