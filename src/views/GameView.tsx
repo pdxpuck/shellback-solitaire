@@ -9,7 +9,10 @@
  * clicked card/run to the first legal foundation move, else to its LEFT-MOST
  * legal destination (ambiguity resolves left-most — lowest layout column,
  * ties → first group; the stock is never auto-chosen, so recycling stays a
- * deliberate stock click). A stock click draws; an empty special slot click
+ * deliberate stock click). Single-tap move (v0.4.7, the singleTapMove
+ * setting, default on): a single tap on a face-up card quick-flies it with
+ * the same semantics, falling back to select when the card has no legal
+ * destination; off restores select-first taps. A stock click draws; an empty special slot click
  * (the stock with the waste nonempty, or Canfield's empty reserve) commits
  * the whole-pile flip-over INTO it (recycle / reserve refill); a click
  * elsewhere deselects.
@@ -72,6 +75,10 @@ interface GameViewProps {
   autoFly: boolean
   /** Settings pick: card-flight pace — slow, med (default), or fast. */
   flightSpeed: FlightSpeed
+  /** Settings toggle (v0.4.7, default on): a single tap on a face-up card
+   *  quick-moves it (double-click semantics), falling back to select when it
+   *  has no legal destination. Off: tap = select (legacy). */
+  singleTapMove: boolean
   /** Open the Settings view; its Back returns to wherever it was opened. */
   onOpenSettings: () => void
 }
@@ -162,6 +169,7 @@ function GameView({
   onBack,
   autoFly,
   flightSpeed,
+  singleTapMove,
   onOpenSettings,
 }: GameViewProps) {
   // The game-agnostic surface, destructured once: `definition` drives the
@@ -519,14 +527,20 @@ function GameView({
   }
 
   /**
-   * Double-click smart move: the first legal foundation move, else the
-   * LEFT-MOST legal destination (lowest layout column; ties → first group)
-   * — ambiguity never blocks the fly, and the stock is never auto-chosen
-   * (recycling stays a deliberate stock click).
+   * Smart move: the first legal foundation move, else the LEFT-MOST legal
+   * destination (lowest layout column; ties → first group) — ambiguity never
+   * blocks the fly, and the stock is never auto-chosen (recycling stays a
+   * deliberate stock click). Returns whether a move group committed — the
+   * single-tap handler falls back to select when nothing committed (the
+   * double-click handlers ignore the return).
    */
-  const quickFly = (from: PileId, count: number) => {
+  const quickFly = (from: PileId, count: number): boolean => {
     const g = quickMove(groups, from, count, (id) => ROLES.get(id), (id) => LAYOUT_COL.get(id) ?? 99)
-    if (g) commit(g.actions)
+    if (g) {
+      commit(g.actions)
+      return true
+    }
+    return false
   }
 
   const newDeal = () => {
@@ -818,7 +832,14 @@ function GameView({
                     return
                   }
                   if (isTarget) drop(hint.pileId)
-                  else if (faceUp) setSelected({ pileId: hint.pileId, count: cards.length - i })
+                  else if (faceUp && singleTapMove) {
+                    // Single-tap move (v0.4.7): the double-click semantics on
+                    // one tap; a STUCK card (no legal destination) falls back
+                    // to the select feedback.
+                    if (!quickFly(hint.pileId, cards.length - i)) {
+                      setSelected({ pileId: hint.pileId, count: cards.length - i })
+                    }
+                  } else if (faceUp) setSelected({ pileId: hint.pileId, count: cards.length - i })
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation()
@@ -880,7 +901,13 @@ function GameView({
                     return
                   }
                   if (isTarget) drop(hint.pileId)
-                  else if (pc.faceUp) setSelected({ pileId: hint.pileId, count: 1 })
+                  else if (pc.faceUp && singleTapMove) {
+                    // Single-tap move (v0.4.7), same fallback shape as the
+                    // fan branch: a stuck top card selects instead.
+                    if (!quickFly(hint.pileId, 1)) {
+                      setSelected({ pileId: hint.pileId, count: 1 })
+                    }
+                  } else if (pc.faceUp) setSelected({ pileId: hint.pileId, count: 1 })
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation()

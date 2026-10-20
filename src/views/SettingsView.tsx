@@ -74,6 +74,24 @@ function SettingsView({ settings, onChange, onBack }: SettingsViewProps) {
         </div>
 
         <div className="setting-row">
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={settings.singleTapMove}
+              onChange={(e) => onChange({ ...settings, singleTapMove: e.target.checked })}
+            />
+            <span className="switch-slider" />
+          </label>
+          <div className="setting-text">
+            <span className="setting-label">Single-tap move</span>
+            <span className="setting-hint">
+              Tap a card to send it on its way — foundation first, else left-most. Stuck cards
+              still select.
+            </span>
+          </div>
+        </div>
+
+        <div className="setting-row">
           <div className="setting-text">
             <span className="setting-label">Card flight speed</span>
             <span className="setting-hint">How fast cards fly across the table.</span>

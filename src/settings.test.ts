@@ -5,11 +5,12 @@ import { DEFAULT_SETTINGS, validateSettings } from './settings'
 const OTHER_THEME_ID = THEMES.find((t) => t.id !== DEFAULT_THEME_ID)!.id
 
 describe('settings validation (pure — no storage)', () => {
-  it('DEFAULT_SETTINGS uses deckhand default theme + auto-fly on + medium flight speed', () => {
+  it('DEFAULT_SETTINGS uses deckhand default theme + auto-fly on + medium flight speed + single-tap move on', () => {
     expect(DEFAULT_SETTINGS).toEqual({
       themeId: DEFAULT_THEME_ID,
       autoFly: true,
       flightSpeed: 'med',
+      singleTapMove: true,
     })
   })
 
@@ -22,6 +23,7 @@ describe('settings validation (pure — no storage)', () => {
       themeId: OTHER_THEME_ID,
       autoFly: true,
       flightSpeed: 'med',
+      singleTapMove: true,
     })
   })
 
@@ -30,6 +32,7 @@ describe('settings validation (pure — no storage)', () => {
       themeId: OTHER_THEME_ID,
       autoFly: true,
       flightSpeed: 'med',
+      singleTapMove: true,
     })
   })
 
@@ -38,6 +41,7 @@ describe('settings validation (pure — no storage)', () => {
       themeId: OTHER_THEME_ID,
       autoFly: false,
       flightSpeed: 'med',
+      singleTapMove: true,
     })
   })
 
@@ -46,16 +50,19 @@ describe('settings validation (pure — no storage)', () => {
       themeId: DEFAULT_THEME_ID,
       autoFly: true,
       flightSpeed: 'med',
+      singleTapMove: true,
     })
     expect(validateSettings({ themeId: DEFAULT_THEME_ID, autoFly: 7 })).toEqual({
       themeId: DEFAULT_THEME_ID,
       autoFly: true,
       flightSpeed: 'med',
+      singleTapMove: true,
     })
     expect(validateSettings({ themeId: DEFAULT_THEME_ID, autoFly: null })).toEqual({
       themeId: DEFAULT_THEME_ID,
       autoFly: true,
       flightSpeed: 'med',
+      singleTapMove: true,
     })
   })
 
@@ -65,6 +72,7 @@ describe('settings validation (pure — no storage)', () => {
         themeId: OTHER_THEME_ID,
         autoFly: false,
         flightSpeed: 'med',
+        singleTapMove: true,
       })
     }
   })
@@ -75,6 +83,48 @@ describe('settings validation (pure — no storage)', () => {
         themeId: OTHER_THEME_ID,
         autoFly: true,
         flightSpeed,
+        singleTapMove: true,
+      })
+    }
+  })
+
+  it('singleTapMove defaults to true when missing (old saves predate the field)', () => {
+    expect(validateSettings({ themeId: OTHER_THEME_ID, autoFly: false, flightSpeed: 'fast' })).toEqual(
+      {
+        themeId: OTHER_THEME_ID,
+        autoFly: false,
+        flightSpeed: 'fast',
+        singleTapMove: true,
+      },
+    )
+  })
+
+  it('keeps an explicit singleTapMove: false', () => {
+    expect(
+      validateSettings({ themeId: OTHER_THEME_ID, autoFly: false, singleTapMove: false }),
+    ).toEqual({
+      themeId: OTHER_THEME_ID,
+      autoFly: false,
+      flightSpeed: 'med',
+      singleTapMove: false,
+    })
+    expect(
+      validateSettings({ themeId: OTHER_THEME_ID, autoFly: false, singleTapMove: true }),
+    ).toEqual({
+      themeId: OTHER_THEME_ID,
+      autoFly: false,
+      flightSpeed: 'med',
+      singleTapMove: true,
+    })
+  })
+
+  it('falls back to the singleTapMove default (true) on garbage — valid siblings are KEPT', () => {
+    for (const singleTapMove of ['yes', 7, null, undefined]) {
+      expect(validateSettings({ themeId: OTHER_THEME_ID, autoFly: false, singleTapMove })).toEqual({
+        themeId: OTHER_THEME_ID,
+        autoFly: false,
+        flightSpeed: 'med',
+        singleTapMove: true,
       })
     }
   })
@@ -88,6 +138,7 @@ describe('settings validation (pure — no storage)', () => {
         themeId: DEFAULT_THEME_ID,
         autoFly: false,
         flightSpeed: 'fast',
+        singleTapMove: true,
       },
     )
   })

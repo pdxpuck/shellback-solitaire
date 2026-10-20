@@ -220,3 +220,6 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
 - User report: missing a card and clicking the felt sometimes "highlights" content that persists until the next felt click.
 - Diagnosis: the app's selection state clears on felt click by design (onClick=deselect), so the persistent highlight is browser-native — text selection from click-drag/double-click, or the native image-drag ghost. The user directive: remove the ability to highlight at all from mouse actions (game view only).
 - Fix: user-select none + tap-highlight transparent on .game-screen; native img/svg drag disabled (CSS) + onDragStart preventDefault backstop on the game-screen root. The app's .selected-run interaction highlight is unaffected.
+
+### FEATURE (v0.4.7): single-tap move (the Oct 15 open question, ruled + shipped)
+- User directive 2026-10-20; design ruling: a `singleTapMove` setting (default ON, autoFly's switch pattern) — tap = quick-move (foundation-first, else left-most, stock excluded; the dblclick semantics), falling back to select when the card has no legal destination; OFF = legacy select-first. Destination-tap drops, drag-and-drop, specialClicks, and the dragJustEnded swallow all unchanged; double-click stays (redundant when ON).

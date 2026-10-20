@@ -2,7 +2,8 @@
  * App settings, persisted to localStorage. C1 scope was theme selection;
  * C2 adds autoFly — safe cards fly to the foundations automatically (see
  * GameView / moveGroup); C3 adds flightSpeed — the card-flight pace (see
- * GameView / FLIGHT_TIMING). Win/loss stats are deliberately deferred:
+ * GameView / FLIGHT_TIMING); v0.4.7 adds singleTapMove — tap = quick-move
+ * (see GameView / quickFly). Win/loss stats are deliberately deferred:
  * they imply the persistence decision (D6), which stays open until C2
  * (see SCOPING_NOTES.md).
  */
@@ -20,12 +21,17 @@ export interface AppSettings {
   autoFly: boolean
   /** Card-flight pace (GameView FLIGHT_TIMING); 'med' is the default. */
   flightSpeed: FlightSpeed
+  /** Single-tap quick-move (v0.4.7) — on (true, default): a tap on a face-up
+   *  card quick-moves it (foundation-first, else left-most), falling back to
+   *  select when it has no legal destination. Off: tap = select (legacy). */
+  singleTapMove: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   themeId: DEFAULT_THEME_ID,
   autoFly: true,
   flightSpeed: 'med',
+  singleTapMove: true,
 }
 
 const STORAGE_KEY = 'shellback.settings.v1'
@@ -39,10 +45,11 @@ const STORAGE_KEY = 'shellback.settings.v1'
  */
 export function validateSettings(raw: unknown): AppSettings {
   if (typeof raw !== 'object' || raw === null) return { ...DEFAULT_SETTINGS }
-  const { themeId, autoFly, flightSpeed } = raw as {
+  const { themeId, autoFly, flightSpeed, singleTapMove } = raw as {
     themeId?: unknown
     autoFly?: unknown
     flightSpeed?: unknown
+    singleTapMove?: unknown
   }
   let validThemeId = DEFAULT_SETTINGS.themeId
   if (typeof themeId === 'string') {
@@ -57,6 +64,8 @@ export function validateSettings(raw: unknown): AppSettings {
     themeId: validThemeId,
     autoFly: typeof autoFly === 'boolean' ? autoFly : DEFAULT_SETTINGS.autoFly,
     flightSpeed: isFlightSpeed(flightSpeed) ? flightSpeed : DEFAULT_SETTINGS.flightSpeed,
+    singleTapMove:
+      typeof singleTapMove === 'boolean' ? singleTapMove : DEFAULT_SETTINGS.singleTapMove,
   }
 }
 

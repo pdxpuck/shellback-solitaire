@@ -58,6 +58,7 @@ function App() {
           theme={theme}
           autoFly={settings.autoFly}
           flightSpeed={settings.flightSpeed}
+          singleTapMove={settings.singleTapMove}
           onBack={() => setView({ kind: 'home' })}
           onOpenSettings={openSettings}
         />
