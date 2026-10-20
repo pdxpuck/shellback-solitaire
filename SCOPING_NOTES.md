@@ -223,6 +223,7 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
 
 ### FEATURE (v0.4.7): single-tap move (the Oct 15 open question, ruled + shipped)
 - User directive 2026-10-20; design ruling: a `singleTapMove` setting (default ON, autoFly's switch pattern) — tap = quick-move (foundation-first, else left-most, stock excluded; the dblclick semantics), falling back to select when the card has no legal destination; OFF = legacy select-first. Destination-tap drops, drag-and-drop, specialClicks, and the dragJustEnded swallow all unchanged; double-click stays (redundant when ON).
+- FIELD VERDICT 2026-10-20 (~10:50 PT, live): PASSED — "single click is working well so far"; the left-most ambiguity ruling held at tap speed.
 
 ### FIX (v0.4.8): waste pile rendered invisible depth — cards "appeared from nowhere"
 - User report mid-Canfield (draw-3): "no idea where some of the cards are." Root cause: the waste/foundation render stacked ALL waste cards at one position/zIndex — only the top was ever visible, so draw-3's other two cards (and Klondike's up-to-24) sat invisible until they surfaced as the top.
