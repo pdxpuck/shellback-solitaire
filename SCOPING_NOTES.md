@@ -34,6 +34,8 @@ collection app from day one — games are added as modules, no throwaway test ap
 | C3 | **Canfield** + contract validation | user plays it |
 | C4+ | new games = new modules; stats/undo/persistence polish; wraps later | per feature |
 
+New-game process: every item in `GAME_CHECKLIST.md` (repo root) is checked before a game ships to 'available'.
+
 ## C1 decisions (2026-10-13)
 - **Game metadata** (family, winnability buckets, status, summary) lives collection-side
   in src/games/registry.ts for C1; migrates into deckhand's game-contract during C2
