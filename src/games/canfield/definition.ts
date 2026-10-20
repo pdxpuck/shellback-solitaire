@@ -41,8 +41,8 @@
  *
  * `legalMoves` enumerates EVERY legal player move — the single source of
  * truth for the future click-click UX and hint search. Deterministic emit
- * order: draw/recycle, reserve refill, foundation moves (reserve top, then
- * tableau tops), then tableau moves (reserve top → any target incl. empty
+ * order: draw/recycle, reserve refill, foundation moves (reserve top, waste
+ * top, then tableau tops), then tableau moves (reserve top → any target incl. empty
  * gaps, waste top → non-empty targets, runs → targets by source t0..t3,
  * top-run first, destinations t0..t3).
  */
@@ -203,14 +203,22 @@ export const canfield: GameDefinition = {
       })
     }
 
-    // Foundation moves: the reserve top first, then the tableau tops. A
-    // reserve play turns the card face up as it is placed (one move action,
-    // no flip — see the header).
+    // Foundation moves: the reserve top, then the waste top, then the
+    // tableau tops. A reserve play turns the card face up as it is placed
+    // (one move action, no flip — see the header).
     const reserveTop = topCard(world, 'reserve')
+    const wasteTop = topCard(world, 'waste')
     if (reserveTop) {
       for (const foundation of FOUNDATION_IDS) {
         if (canDropOnFoundation(world, foundation, reserveTop.card)) {
           moves.push({ type: 'move', from: 'reserve', to: foundation, count: 1, faceUp: true })
+        }
+      }
+    }
+    if (wasteTop) {
+      for (const foundation of FOUNDATION_IDS) {
+        if (canDropOnFoundation(world, foundation, wasteTop.card)) {
+          moves.push({ type: 'move', from: 'waste', to: foundation, count: 1 })
         }
       }
     }
@@ -237,7 +245,6 @@ export const canfield: GameDefinition = {
         }
       }
     }
-    const wasteTop = topCard(world, 'waste')
     if (wasteTop) {
       for (const target of TABLEAU_IDS) {
         if (canDropOnTableau(world, target, wasteTop.card)) {

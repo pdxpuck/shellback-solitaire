@@ -140,7 +140,7 @@ describe('canfield legalMoves — draw / recycle / reserve refill', () => {
     expect(findMove(midDeal, 'waste', 'stock')).toBeUndefined()
     expect(findMove(midDeal, 'stock', 'waste')).toBeDefined()
     // Stock empty → the flip-over, and it replays as one.
-    const exhausted = rig(up('waste', [['S', 1], ['H', 5], ['D', 9]]))
+    const exhausted = rig(up('found-0', [['D', 7]]), up('waste', [['S', 1], ['H', 5], ['D', 9]]))
     const recycle = findMove(exhausted, 'waste', 'stock')
     expect(recycle).toEqual({
       type: 'move',
@@ -160,7 +160,7 @@ describe('canfield legalMoves — draw / recycle / reserve refill', () => {
     // The dealt reserve holds 13 → no refill.
     expect(findMove(game.deal(42), 'waste', 'reserve')).toBeUndefined()
     // Reserve empty + waste nonempty → the flip-over into the reserve.
-    const drained = rig(up('waste', [['S', 1], ['H', 5]]))
+    const drained = rig(up('found-0', [['D', 7]]), up('waste', [['S', 1], ['H', 5]]))
     expect(findMove(drained, 'waste', 'reserve')).toEqual({
       type: 'move',
       from: 'waste',
@@ -174,7 +174,7 @@ describe('canfield legalMoves — draw / recycle / reserve refill', () => {
   })
 
   it('emit order: the recycle precedes the reserve refill when both are legal', () => {
-    const moves = game.legalMoves(rig(up('waste', [['S', 1], ['H', 5], ['D', 9]])))
+    const moves = game.legalMoves(rig(up('found-0', [['D', 7]]), up('waste', [['S', 1], ['H', 5], ['D', 9]])))
     expect(moves[0]).toEqual({
       type: 'move',
       from: 'waste',
@@ -248,6 +248,43 @@ describe('canfield legalMoves — foundations', () => {
     // Even an empty tableau takes nothing from a foundation (reserve-only gaps).
     expect(findMove(world, 'found-1', 't2')).toBeUndefined()
     expect(findMove(world, 'found-0', 't2')).toBeUndefined()
+  })
+
+  it('the waste top of the base rank lands on ANY empty foundation; a non-base-rank waste card does not', () => {
+    // Base card 7♦ → base rank 7; the waste top 7♥ is base-rank (any suit).
+    const world = rig(up('found-0', [['D', 7]]), up('waste', [['H', 7]]))
+    expect(findMove(world, 'waste', 'found-1', 1)).toEqual({
+      type: 'move',
+      from: 'waste',
+      to: 'found-1',
+      count: 1,
+    })
+    // 9♥ is not the base rank: it lands on no empty foundation.
+    const wrong = rig(up('found-0', [['D', 7]]), up('waste', [['H', 9]]))
+    expect(findMove(wrong, 'waste', 'found-1', 1)).toBeUndefined()
+  })
+
+  it('the waste top builds in suit onto a BUILT foundation; a wrong-suit next-rank card does not', () => {
+    // found-1 holds 7♥+8♥; the waste top 9♥ is the next rank in suit.
+    const world = rig(
+      up('found-0', [['D', 7]]),
+      up('found-1', [['H', 7], ['H', 8]]),
+      up('waste', [['H', 9]]),
+    )
+    expect(findMove(world, 'waste', 'found-1', 1)).toEqual({
+      type: 'move',
+      from: 'waste',
+      to: 'found-1',
+      count: 1,
+    })
+    // 9♠ is the next rank after 8♥ but the wrong suit, and the empty
+    // foundations want the base rank only.
+    const wrongSuit = rig(
+      up('found-0', [['D', 7]]),
+      up('found-1', [['H', 7], ['H', 8]]),
+      up('waste', [['S', 9]]),
+    )
+    expect(findMove(wrongSuit, 'waste', 'found-1', 1)).toBeUndefined()
   })
 })
 

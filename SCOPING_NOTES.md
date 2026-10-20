@@ -193,8 +193,14 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
 - Activated-drag ends swallow the trailing browser click (dragJustEnded guard at the top of
   every card onClick); undo / new deal / play # cancel the drag alongside cancelFlights.
 
-### KNOWN BUG (next session, v0.4.2): canfield waste→foundation enumeration missing
-- User hit (2026-10-15, live, Canfield Preview): base rank 7; a second 7 surfaced from the stock would NOT double-click to a foundation — it flew to a tableau instead (left-most fallback).
-- Root cause: canfield legalMoves enumerates foundation moves for reserve tops + tableau tops but NOT the waste top — the enumeration block was omitted from the CB2 spec (Klondike's template has it; the module header's emit-order line inherits the same omission).
-- Fix spec (v0.4.2, ~15 min): in legalMoves' foundation section, add the wasteTop block mirroring Klondike — if (wasteTop) { for (const foundation of FOUNDATION_IDS) { if (canDropOnFoundation(world, foundation, wasteTop.card)) moves.push({ type: 'move', from: 'waste', to: foundation, count: 1 }) } } — placed with the other foundation sections; update the header's emit-order line (reserve top, waste top, then tableau tops); +2 tests (base-rank card from the waste onto an EMPTY foundation; next-rank card from the waste onto a BUILT foundation). quickMove/quickFly need NO changes — they consume legalMoves.
+### Canfield waste→foundation bug — FIXED v0.4.2 (2026-10-20)
+- Field report 2026-10-15 (live, Canfield Preview): base rank 7; a second 7 surfaced from the stock would NOT double-click to a foundation — it flew to a tableau instead (left-most fallback).
+- Root cause: legalMoves' foundation section enumerated reserve tops + tableau tops but not the waste top (the block was omitted from the CB2 spec; the header's emit-order line inherited the omission).
+- Fix (v0.4.2): the waste-top foundation block added mirroring Klondike (single wasteTop declaration hoisted beside reserveTop; block sits after the reserve-top block, before the tableau-tops loop); header + section emit-order comments updated (reserve top, waste top, then tableau tops). quickMove/quickFly needed no changes (they consume legalMoves).
+- Tests 122→124: +2 (waste→empty foundation at base rank w/ non-base-rank negative; waste→built foundation in suit w/ wrong-suit negative).
+- LESSON: every crafted Canfield rig must carry a face-up found-0 base card — baseRank throws on empty found-0 by design, and the waste block is now a code path that reaches it. Three pre-existing draw/recycle rigs (lines ~143/163/177) predated the invariant and were amended with up('found-0', [['D', 7]]); assertions untouched. Also repaired in this commit: package-lock.json had drifted stale at 0.3.17.
 - ALSO open from earlier: the v0.3.20 ghost flight-order z fix shipped but user confirmation is PENDING (they moved to Canfield before retesting Klondike cascades — verify with ?slowmo=4).
+
+### FIELD REPORT (2026-10-20, OPEN): green felt table resizes during play
+- User report (~09:00 PT): "something very broken about the new green table top — it keeps on resizing during the game and often looks wrong."
+- The felt table default shipped v0.3.19 (table cosmetics ladder: felt default → table presets → unlockable tables). No root cause identified yet; investigation queued this session. Suspects to check when picked up: felt element sizing driven by board content, interaction with the flight-overlay layer, .pile-slot isolation:isolate (v0.3.8), win-banner/overlay sizing, mobile-viewport handling.
