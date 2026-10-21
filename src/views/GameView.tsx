@@ -63,7 +63,7 @@ import type { FlightSpeed } from '../settings'
 import { groupMoves, quickMove } from '../games/gameViews'
 import type { GameViewConfig, GameState } from '../games/gameViews'
 import { flightPlan } from './flights'
-import { columnHeightFor, fanOffsetIn } from './layout'
+import { cardWidthFor, columnHeightFor, fanOffsetIn, gameScreenPadX, gapFor } from './layout'
 
 interface GameViewProps {
   /** The per-game view config (definition + session + presentation glue). */
@@ -83,7 +83,19 @@ interface GameViewProps {
   onOpenSettings: () => void
 }
 
-const CARD_WIDTH = 90
+/** CSS geometry mirrors (index.css) used to unwind the board's boxes down
+ *  to the content width the grid actually lays out into — the mount-time
+ *  card solver's inputs (L2 mobile pass). Kept as named constants beside
+ *  the solver so a CSS change here has a code counterpart to update.
+ *  (.game-screen's horizontal padding is NOT here: it is viewport-
+ *  conditional — 24px/side desktop, 12px/side under the ≤520px media
+ *  query — so it mirrors as layout.ts's gameScreenPadX function.) */
+/** .board width cap: `max-width: 960px`, the centered column. */
+const BOARD_MAX_WIDTH = 960
+/** .board padding-left: the reserve depth-sliver reserve (v0.4.9). */
+const BOARD_PAD_LEFT = 16
+/** .board padding-right: the waste right-fan reserve (v0.4.8). */
+const BOARD_PAD_RIGHT = 32
 
 /** Press-to-drag threshold: a press moving beyond this many px is a drag. */
 const DRAG_THRESHOLD_PX = 6
@@ -252,7 +264,22 @@ function GameView({
   const mapCols = 1 + Math.max(...definition.layout.map((hint) => hint.col))
   const mapRows = 1 + Math.max(...definition.layout.map((hint) => hint.row))
 
-  const cardHeight = Math.round(CARD_WIDTH * theme.ratio)
+  // Card size (L2 mobile pass): derived ONCE per view mount from the
+  // viewport width — the same mount-constant discipline as columnHeight
+  // below (viewport changes mid-game must not reflow the table). Unwind
+  // the CSS boxes to the board's content-box width (constants above
+  // mirror index.css; the padding via gameScreenPadX, which applies the
+  // same ≤520px breakpoint the stylesheet does), then solve 7 columns +
+  // 6 gaps inside it.
+  const [cardWidth] = useState(() => {
+    const gameScreenInner = window.innerWidth - 2 * gameScreenPadX(window.innerWidth)
+    const boardOuter = Math.min(gameScreenInner, BOARD_MAX_WIDTH)
+    return cardWidthFor(boardOuter - BOARD_PAD_LEFT - BOARD_PAD_RIGHT)
+  })
+  /** The mount-constant inter-column gap — proportional to the card width
+   *  and clamp-bounded (laptop: 12px, identical to today's CSS). */
+  const gap = gapFor(cardWidth)
+  const cardHeight = Math.round(cardWidth * theme.ratio)
   // The fan box: constant for this view's lifetime. Captured ONCE from the
   // viewport at mount — viewport changes mid-game must not reflow piles
   // (layout.ts contract: no window reads during render).
@@ -747,7 +774,7 @@ function GameView({
   const cellStyle = (hint: LayoutHint, height: number): CSSProperties => ({
     gridColumn: hint.col + 1,
     gridRow: hint.row + 1,
-    width: CARD_WIDTH,
+    width: cardWidth,
     height,
   })
 
@@ -781,7 +808,7 @@ function GameView({
                 ...(hiddenCards.has(top.card.id) ? { visibility: 'hidden' as const } : {}),
               }}
             >
-              <CardView card={top.card} faceUp={false} theme={theme} width={CARD_WIDTH} />
+              <CardView card={top.card} faceUp={false} theme={theme} width={cardWidth} />
             </div>
           )}
           {top === null && world.piles.waste.cards.length > 0 && (
@@ -895,7 +922,7 @@ function GameView({
                   quickFly(hint.pileId, cards.length - i)
                 }}
               >
-                <CardView card={pc.card} faceUp={faceUp} theme={theme} width={CARD_WIDTH} />
+                <CardView card={pc.card} faceUp={faceUp} theme={theme} width={cardWidth} />
               </div>
             )
           })}
@@ -1000,7 +1027,7 @@ function GameView({
                       }
                     : {})}
                 >
-                  <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
+                  <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={cardWidth} />
                 </div>
               )
             })}
@@ -1098,7 +1125,26 @@ function GameView({
       {/* The board scrolls INTERNALLY inside the fixed felt surface — the
           green never resizes; the header above stays pinned. */}
       <div className="board-scroll">
-        <section className="board" ref={boardRef} aria-label={`${meta.title} table`}>
+        {/* The board's grid geometry is set INLINE from the mount-derived
+            card width — minmax(cardWidth, 1fr) tracks + the proportional
+            gap. With slack the tracks stretch exactly like the
+            stylesheet's 1fr (laptop: 912 content − 6×12 gaps = 840,
+            840/7 = 120px tracks ≥ the 90px card → byte-identical pitch
+            to the pre-L2 keeper); without slack the minmax floor is the
+            derived cardWidth, which cardWidthFor guarantees fits.
+            Cards render at cardWidth px inside ≥cardWidth tracks —
+            flights/drops measure DOM rects and follow. The stylesheet's
+            repeat(7, 1fr) stays as the no-JS fallback underneath. */}
+        <section
+          className="board"
+          ref={boardRef}
+          aria-label={`${meta.title} table`}
+          style={{
+            gridTemplateColumns: `repeat(7, minmax(${cardWidth}px, 1fr))`,
+            columnGap: gap,
+            rowGap: gap + 4,
+          }}
+        >
           {definition.layout.map(renderPile)}
         </section>
       </div>
@@ -1117,7 +1163,7 @@ function GameView({
                   {
                     left: spec.srcLeft,
                     top: spec.srcTop,
-                    width: CARD_WIDTH,
+                    width: cardWidth,
                     zIndex: spec.zIndex,
                     animationDelay: `${spec.delayMs}ms`,
                     '--flight-dur': `${timing.leg}ms`,
@@ -1126,7 +1172,7 @@ function GameView({
                   } as CSSProperties
                 }
               >
-                <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={CARD_WIDTH} />
+                <CardView card={pc.card} faceUp={pc.faceUp} theme={theme} width={cardWidth} />
               </div>
             )
           })}
@@ -1141,14 +1187,14 @@ function GameView({
           <div
             ref={ghostRef}
             className={`drag-ghost${drag.snapBack ? ' snapping' : ''}`}
-            style={{ left: drag.left, top: drag.top, width: CARD_WIDTH }}
+            style={{ left: drag.left, top: drag.top, width: cardWidth }}
             onTransitionEnd={(e) => {
               if (e.target === e.currentTarget && e.propertyName === 'transform') clearDrag()
             }}
           >
             {dragRun.map((pc, i) => (
               <div key={pc.card.id} className="drag-card" style={{ top: i * DRAG_FAN_OFFSET }}>
-                <CardView card={pc.card} faceUp={pc.faceUp || reserveDrag} theme={theme} width={CARD_WIDTH} />
+                <CardView card={pc.card} faceUp={pc.faceUp || reserveDrag} theme={theme} width={cardWidth} />
               </div>
             ))}
           </div>
@@ -1189,7 +1235,10 @@ function GameView({
             <div
               className="rules-map"
               style={{
-                gridTemplateColumns: `repeat(${mapCols}, 44px)`,
+                // Cell size lives in index.css (.rules-map: 44px, shrunk to
+                // 38px on phones by the ≤520px media query) — the inline
+                // template only covers layouts off the 7-column default.
+                ...(mapCols === 7 ? {} : { gridTemplateColumns: `repeat(${mapCols}, 44px)` }),
                 gridTemplateRows: `repeat(${mapRows}, auto)`,
               }}
             >

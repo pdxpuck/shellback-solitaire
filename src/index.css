@@ -576,8 +576,10 @@ body {
 }
 
 /* The generated layout diagram: one tinted box per pile, label beneath.
-   7 columns covers both shipped games; GameView narrows/widens it inline
-   from the definition's own layout hints. */
+   7 columns covers both shipped games — the column size lives HERE (44px,
+   38px on phones via the ≤520px media query below) so the responsive size
+   applies; GameView inlines a template only for layouts off the 7-column
+   default. */
 .rules-map {
   display: grid;
   grid-template-columns: repeat(7, 44px);
@@ -707,4 +709,25 @@ body {
 .drag-card {
   position: absolute;
   left: 0;
+}
+
+/* ---- L2 mobile pass (v0.5.0): phone-width felt ---- */
+
+/* At phone widths: narrower felt chrome and a smaller rules diagram —
+   7×38 + 6×6 = 302px fits the ~332px rules-panel inner width at a 412px
+   viewport. The toolbar is deliberately untouched (D11), as are .board's
+   paddings. NOTE: GameView's mount-time card solver mirrors THIS
+   breakpoint — layout.ts's gameScreenPadX switches the .game-screen
+   padding mirror 24→12px/side at the same 520px width — so the padding
+   the solver subtracts matches the padding actually applied. This 520
+   and the one in gameScreenPadX MUST move together. */
+@media (max-width: 520px) {
+  .game-screen {
+    padding: 16px 12px;
+  }
+
+  .rules-map {
+    grid-template-columns: repeat(7, 38px);
+    gap: 6px;
+  }
 }
