@@ -63,7 +63,7 @@ import type { FlightSpeed } from '../settings'
 import { groupMoves, quickMove } from '../games/gameViews'
 import type { GameViewConfig, GameState } from '../games/gameViews'
 import { flightPlan } from './flights'
-import { cardWidthFor, columnHeightFor, fanOffsetIn, gameScreenPadX, gapFor } from './layout'
+import { boardPads, cardWidthFor, columnHeightFor, fanOffsetIn, gameScreenPadX, gapFor, sliverExtent, wasteFanStep } from './layout'
 
 interface GameViewProps {
   /** The per-game view config (definition + session + presentation glue). */
@@ -84,22 +84,24 @@ interface GameViewProps {
 }
 
 /** CSS geometry mirrors (index.css) used to unwind the board's boxes down
- *  to the content width the grid actually lays out into — the mount-time
- *  card solver's inputs (L2 mobile pass). Kept as named constants beside
- *  the solver so a CSS change here has a code counterpart to update.
- *  (.game-screen's horizontal padding is NOT here: it is viewport-
+ *  to the outer width the mount-time card solver consumes (L2 mobile
+ *  pass). (.game-screen's horizontal padding is NOT here: it is viewport-
  *  conditional — 24px/side desktop, 12px/side under the ≤520px media
- *  query — so it mirrors as layout.ts's gameScreenPadX function.) */
+ *  query — so it mirrors as layout.ts's gameScreenPadX function. The
+ *  .board horizontal paddings are also NOT here anymore: since v0.5.1 the
+ *  chrome they reserved (depth slivers + waste fan) is proportional to
+ *  the card width, so layout.ts's boardPads derives them from the solved
+ *  cardWidth and the view applies them INLINE (below); the stylesheet's
+ *  fixed 16/32 remain only as the no-JS fallback.) */
 /** .board width cap: `max-width: 960px`, the centered column. */
 const BOARD_MAX_WIDTH = 960
-/** .board padding-left: the reserve depth-sliver reserve (v0.4.9). */
-const BOARD_PAD_LEFT = 16
-/** .board padding-right: the waste right-fan reserve (v0.4.8). */
-const BOARD_PAD_RIGHT = 32
 
 /** Press-to-drag threshold: a press moving beyond this many px is a drag. */
 const DRAG_THRESHOLD_PX = 6
-/** Fan offset between consecutive cards in the dragged run's ghost. */
+/** Fan offset between consecutive cards in the dragged run's ghost.
+ *  OVERLAY-only geometry, consciously NOT proportional to the card width
+ *  (v0.5.1): the ghost is a transient drag affordance, not board chrome —
+ *  it never participates in the board solve or flight landings. */
 const DRAG_FAN_OFFSET = 12
 /** Snap-back fallback: clear the drag if transitionend never fires. */
 const SNAP_BACK_MS = 160
@@ -267,18 +269,28 @@ function GameView({
   // Card size (L2 mobile pass): derived ONCE per view mount from the
   // viewport width — the same mount-constant discipline as columnHeight
   // below (viewport changes mid-game must not reflow the table). Unwind
-  // the CSS boxes to the board's content-box width (constants above
-  // mirror index.css; the padding via gameScreenPadX, which applies the
-  // same ≤520px breakpoint the stylesheet does), then solve 7 columns +
-  // 6 gaps inside it.
+  // the .game-screen padding via gameScreenPadX (the same ≤520px
+  // breakpoint the stylesheet applies) and cap at the board's CSS
+  // max-width, then hand the BOARD OUTER width to cardWidthFor: since
+  // v0.5.1 the board's reserved chrome (slivers + waste fan) is
+  // proportional to the card width, so the solve derives it internally.
   const [cardWidth] = useState(() => {
     const gameScreenInner = window.innerWidth - 2 * gameScreenPadX(window.innerWidth)
-    const boardOuter = Math.min(gameScreenInner, BOARD_MAX_WIDTH)
-    return cardWidthFor(boardOuter - BOARD_PAD_LEFT - BOARD_PAD_RIGHT)
+    return cardWidthFor(Math.min(gameScreenInner, BOARD_MAX_WIDTH))
   })
-  /** The mount-constant inter-column gap — proportional to the card width
-   *  and clamp-bounded (laptop: 12px, identical to today's CSS). */
+  /** The mount-constant inter-column gap — a flat tap-gutter floor on
+   *  phones, ramping to the 12px keeper gap at the desktop card. */
   const gap = gapFor(cardWidth)
+  /** The mount-constant board chrome paddings (v0.5.1) — applied inline
+   *  over the stylesheet's fixed 16/32 no-JS fallback. */
+  const pads = boardPads(cardWidth)
+  /** THE shared waste-fan step (v0.5.1): both the board's fan render and
+   *  the flight-landing offsets consume this one value — a stale literal
+   *  in either path mislands flights (the v0.4.3 lesson). */
+  const fanStep = wasteFanStep(cardWidth)
+  /** The shared depth-sliver extent (v0.5.1): both the waste and reserve
+   *  sliver renders consume it. */
+  const sliver = sliverExtent(cardWidth)
   const cardHeight = Math.round(cardWidth * theme.ratio)
   // The fan box: constant for this view's lifetime. Captured ONCE from the
   // viewport at mount — viewport changes mid-game must not reflow piles
@@ -478,10 +490,13 @@ function GameView({
         // Waste landings arrive at the card's FANNED position (v0.4.8):
         // absolute fan index (landedOnCount - run + i) minus the fan window
         // base (landedCount - 3, floored at 0) — the same slice index the
-        // board renders once the card is visible. Tableaux keep the vertical
-        // fan; waste fans horizontally only; other piles use the origin.
+        // board renders once the card is visible. The step is the shared
+        // mount-derived fanStep (v0.5.1) — the exact value the board's
+        // waste branch renders with, so flights never misland. Tableaux
+        // keep the vertical fan; waste fans horizontally only; other piles
+        // use the origin.
         const landedIdx = step.landedOnCount - run + i
-        const fanLeft = wasteFan ? (landedIdx - Math.max(0, step.landedOnCount - 3)) * 14 : 0
+        const fanLeft = wasteFan ? (landedIdx - Math.max(0, step.landedOnCount - 3)) * fanStep : 0
         const left = rect.left + fanLeft
         const top = rect.top + landedIdx * fan
         flownTo.set(cardId, { left, top })
@@ -861,12 +876,13 @@ function GameView({
         >
           {/* Reserve depth slivers (v0.4.9): the squared stack shows its bulk
               via the same edge strips the waste fan uses — first children, so
-              they paint behind the stack. */}
+              they paint behind the stack. Extents are the shared mount-
+              derived sliver (v0.5.1): half extent at >3 cards, full at >10. */}
           {isReserve && cards.length > 3 && (
-            <div className="waste-depth" style={{ left: -6 }} aria-hidden="true" />
+            <div className="waste-depth" style={{ left: -sliver / 2 }} aria-hidden="true" />
           )}
           {isReserve && cards.length > 10 && (
-            <div className="waste-depth" style={{ left: -12 }} aria-hidden="true" />
+            <div className="waste-depth" style={{ left: -sliver }} aria-hidden="true" />
           )}
           {/* Drop-target landing outline: card-sized, at the attachment point
               (top = cards.length * offset) — marks where the dropped card
@@ -950,11 +966,12 @@ function GameView({
     }
     const selectedTop = selected !== null && selected.pileId === hint.pileId
     // Waste depth cue (v0.4.8, user design): the waste right-fans its top
-    // three cards (14px steps — the next two faces are readable) over
-    // left-edge depth slivers, so a thick pile reads as thick. Foundations
-    // stay stacked (their top is the only meaningful face). The fan window
-    // starts at-or-before the deepest VISIBLE card, so a pile mid-flight
-    // still renders topmost-visible-down (the never-blank contract above).
+    // three cards (the shared mount-derived fanStep — 14px at the desktop
+    // 90px card; the next two faces are readable) over left-edge depth
+    // slivers, so a thick pile reads as thick. Foundations stay stacked
+    // (their top is the only meaningful face). The fan window starts
+    // at-or-before the deepest VISIBLE card, so a pile mid-flight still
+    // renders topmost-visible-down (the never-blank contract above).
     const isWaste = hint.pileId === 'waste'
     const fanStart = isWaste
       ? Math.max(0, Math.min(visibleIdx, cards.length - 3))
@@ -970,10 +987,10 @@ function GameView({
         {visibleIdx >= 0 ? (
           <>
             {isWaste && cards.length > 3 && (
-              <div className="waste-depth" style={{ left: -6 }} aria-hidden="true" />
+              <div className="waste-depth" style={{ left: -sliver / 2 }} aria-hidden="true" />
             )}
             {isWaste && cards.length > 10 && (
-              <div className="waste-depth" style={{ left: -12 }} aria-hidden="true" />
+              <div className="waste-depth" style={{ left: -sliver }} aria-hidden="true" />
             )}
             {cards.slice(fanStart).map((pc, k) => {
               // Only the pile's actual top card drags — a still-flying (hidden)
@@ -999,7 +1016,7 @@ function GameView({
                   {...(draggable ? dragHandle.bindings : {})}
                   style={{
                     ...(draggable ? dragHandle.bindings.style : {}),
-                    left: isWaste ? k * 14 : 0,
+                    left: isWaste ? k * fanStep : 0,
                     zIndex: isWaste ? k + 1 : 1,
                     ...(hiddenCards.has(pc.card.id) ? { visibility: 'hidden' as const } : {}),
                   }}
@@ -1127,11 +1144,14 @@ function GameView({
       <div className="board-scroll">
         {/* The board's grid geometry is set INLINE from the mount-derived
             card width — minmax(cardWidth, 1fr) tracks + the proportional
-            gap. With slack the tracks stretch exactly like the
-            stylesheet's 1fr (laptop: 912 content − 6×12 gaps = 840,
-            840/7 = 120px tracks ≥ the 90px card → byte-identical pitch
-            to the pre-L2 keeper); without slack the minmax floor is the
-            derived cardWidth, which cardWidthFor guarantees fits.
+            gap, and (v0.5.1) the proportional chrome paddings: the
+            sliver/fan reserves shrink with the cards (stylesheet's fixed
+            16/32 remain the no-JS fallback underneath). With slack the
+            tracks stretch exactly like the stylesheet's 1fr (laptop: 960
+            outer − {16,32} chrome = 912 content − 6×12 gaps = 840, 840/7 =
+            120px tracks ≥ the 90px card → byte-identical pitch to the
+            pre-L2 keeper); without slack the minmax floor is the derived
+            cardWidth, which cardWidthFor guarantees fits.
             Cards render at cardWidth px inside ≥cardWidth tracks —
             flights/drops measure DOM rects and follow. The stylesheet's
             repeat(7, 1fr) stays as the no-JS fallback underneath. */}
@@ -1143,6 +1163,8 @@ function GameView({
             gridTemplateColumns: `repeat(7, minmax(${cardWidth}px, 1fr))`,
             columnGap: gap,
             rowGap: gap + 4,
+            paddingLeft: pads.left,
+            paddingRight: pads.right,
           }}
         >
           {definition.layout.map(renderPile)}

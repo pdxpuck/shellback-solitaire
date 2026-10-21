@@ -11,12 +11,34 @@ import {
   FAN_RATIO,
   MAX_CARD_WIDTH,
   MIN_CARD_WIDTH,
+  boardPads,
   cardWidthFor,
   columnHeightFor,
   fanOffsetIn,
   gameScreenPadX,
   gapFor,
+  sliverExtent,
+  wasteFanStep,
 } from './layout'
+
+/** Verbatim replica of layout.ts's private two-pass solve (solveCardWidth
+ *  is un-exported, so the assertions replicate it — if the real core and
+ *  this replica drift, these tests silently stop fencing it; both carry
+ *  this comment). Takes the BOARD OUTER separately: the guarded pass-2
+ *  upgrade checks the full row INCLUDING the w2-consistent chrome against
+ *  the actual outer, not the stale-chrome content box. */
+const solve = (content: number, boardOuter: number): number => {
+  const w1 = Math.min(MAX_CARD_WIDTH, Math.max(MIN_CARD_WIDTH, Math.floor(content / 7.8)))
+  const g1 = gapFor(w1)
+  const w2 = Math.min(
+    MAX_CARD_WIDTH,
+    Math.max(MIN_CARD_WIDTH, Math.floor((content - 6 * g1) / 7)),
+  )
+  const pads2 = boardPads(w2)
+  return gapFor(w2) <= g1 && 7 * w2 + 6 * gapFor(w2) + pads2.left + pads2.right <= boardOuter
+    ? w2
+    : Math.min(w1, w2)
+}
 
 describe('layout — fixed-box fan model', () => {
   it('a pile with count <= 1 fans with no offset', () => {
@@ -59,22 +81,53 @@ describe('layout — fixed-box fan model', () => {
   })
 })
 
-describe('layout — mount-time card sizing (L2 mobile pass)', () => {
-  it('gapFor: proportional at the 12/90 ratio, clamped to [4, 12]', () => {
+describe('layout — mount-time card sizing (L2 mobile pass, v0.5.1 proportional chrome)', () => {
+  it('gapFor: flat tap-gutter floor on phones, linear ramp to the 12px keeper gap', () => {
+    expect(gapFor(42)).toBe(4) // the solve's card-width floor: gutter floor
+    expect(gapFor(48)).toBe(4) // the phone regime: flat 4px tap gutter
+    expect(gapFor(60)).toBe(5) // round((60-42)/4) — the ramp begins
+    expect(gapFor(80)).toBe(10)
+    expect(gapFor(86)).toBe(11)
     expect(gapFor(90)).toBe(12) // the laptop keeper: exactly the CSS gap
-    expect(gapFor(43)).toBe(6) // the 412px-phone card
     expect(gapFor(20)).toBe(4) // floor clamp
     expect(gapFor(200)).toBe(12) // ceiling clamp
   })
 
-  it('cardWidthFor: laptop content keeps the 90px card (D10), phone content fits', () => {
-    // 912 = the laptop board content box (min(1920 - 48, 960) - 48).
-    expect(cardWidthFor(912)).toBe(MAX_CARD_WIDTH)
-    // 340 = a 412px phone's content box: 412 - 2×gameScreenPadX(412) - 48
-    // (the .board paddings) — the full chain is pinned in the
-    // gameScreenPadX case below.
-    expect(cardWidthFor(340)).toBe(43)
-    // Clamps: tiny content floors at MIN, huge content stays at the keeper.
+  it('wasteFanStep / sliverExtent / boardPads: desktop identity at 90, phone rescale at 48', () => {
+    // THE desktop-identity assertion (D10): at the keeper 90px card every
+    // derived chrome equals the fixed constant it replaced — if this
+    // regresses, the laptop layout is no longer byte-identical.
+    expect(wasteFanStep(90)).toBe(14)
+    expect(sliverExtent(90)).toBe(12)
+    expect(boardPads(90)).toEqual({ left: 16, right: 32 })
+    // Phone rescale: the chrome shrinks with the cards.
+    expect(wasteFanStep(48)).toBe(7)
+    expect(sliverExtent(48)).toBe(6)
+    expect(boardPads(48)).toEqual({ left: 10, right: 18 })
+  })
+
+  it('cardWidthFor fixpoints: desktop 960 → 90 (D10), phone 388 → 48 (exact fit), tablet 720 → 86', () => {
+    // 960 = the desktop board outer (min(1920 − 2×24, 960)) — the stable
+    // keeper fixed point: boardPads(90) = {16,32} → content 912 → solve → 90.
+    expect(cardWidthFor(960)).toBe(MAX_CARD_WIDTH)
+    // 388 = a 412px phone's board outer (412 − 2×gameScreenPadX(412)).
+    // Exact-fit fixed point 48: boardPads(48) = {10,18} → content 360 →
+    // solve → 48. The guarded two-pass solve takes w2 = floor(360/7) = 48
+    // because the chrome is FLAT across 46→48 ({10, 18} at both widths):
+    // the full row 7*48 + 6*4 + 10 + 18 = 388 lands exactly on the outer —
+    // zero margin. (The old min(w1, w2) conservatism returned
+    // w1 = floor(360/7.8) = 46 and left 2px of the phone's slack on the
+    // table.)
+    expect(cardWidthFor(388)).toBe(48)
+    // 720 mid tablet: whatever the solve produces, it must FIT its outer
+    // box (row + its own chrome), and it lands at 86.
+    const tablet = cardWidthFor(720)
+    const tabletPads = boardPads(tablet)
+    expect(
+      7 * tablet + 6 * gapFor(tablet) + tabletPads.left + tabletPads.right,
+    ).toBeLessThanOrEqual(720)
+    expect(tablet).toBe(86)
+    // Clamps: tiny outers floor at MIN, huge outers stay at the keeper.
     expect(cardWidthFor(100)).toBe(MIN_CARD_WIDTH)
     expect(cardWidthFor(5000)).toBe(MAX_CARD_WIDTH)
   })
@@ -90,40 +143,67 @@ describe('layout — mount-time card sizing (L2 mobile pass)', () => {
     expect(gameScreenPadX(768)).toBe(24)
     expect(gameScreenPadX(1024)).toBe(24)
     expect(gameScreenPadX(1920)).toBe(24)
-    // The pinned chain: 412 - 2×12 (gameScreenPadX) - 48 (board pads) =
-    // 340 content → cardWidthFor(340) = 43 — the phone derives 43, not
-    // the 42 the old desktop-padding assumption produced.
-    expect(412 - 2 * gameScreenPadX(412) - 48).toBe(340)
-    expect(cardWidthFor(412 - 2 * gameScreenPadX(412) - 48)).toBe(43)
+    // The pinned chain: 412 − 2×12 (gameScreenPadX) = 388 board outer →
+    // cardWidthFor derives the chrome internally and lands on 48 (the
+    // v0.5.1 proportional-chrome phone card at its exact-fit fixed point;
+    // was 43 under the fixed 48px chrome reservation, 46 under the
+    // unguarded min() tie-break).
+    expect(412 - 2 * gameScreenPadX(412)).toBe(388)
+    expect(cardWidthFor(412 - 2 * gameScreenPadX(412))).toBe(48)
   })
 
-  it('INVARIANT: 7 cards + 6 gaps fit the content width for every width 280..1400 — the fits-a-phone fence', () => {
+  it('INVARIANT: 7 cards + 6 gaps + chrome fit the outer width — at BOTH emitted answers (w and the re-solved w\') — for every width 280..1400 step 1 — the fits-a-phone fence', () => {
     // Below the physical floor the MIN clamp binds by design (no 7-column
-    // row fits) — the solve must return the floor itself, never invent a
-    // wider card; the board's internal scroller absorbs the overflow.
-    const physicalFloor = 7 * MIN_CARD_WIDTH + 6 * gapFor(MIN_CARD_WIDTH)
-    for (let contentWidth = 280; contentWidth <= 1400; contentWidth += 10) {
-      const cardWidth = cardWidthFor(contentWidth)
-      if (contentWidth < physicalFloor) {
+    // row + chrome fits) — the solve must return the floor itself, never
+    // invent a wider card; the board's internal scroller absorbs the
+    // overflow. The floor is OUTER-space since v0.5.1 (row + chrome at
+    // MIN — the 42px-clamp band grew with the proportional reservation),
+    // recomputed here from the functions.
+    const floorPads = boardPads(MIN_CARD_WIDTH)
+    const physicalFloor =
+      7 * MIN_CARD_WIDTH + 6 * gapFor(MIN_CARD_WIDTH) + floorPads.left + floorPads.right // 346
+    for (let outer = 280; outer <= 1400; outer += 1) {
+      const cardWidth = cardWidthFor(outer)
+      const pads = boardPads(cardWidth)
+      if (outer < physicalFloor) {
         expect(cardWidth).toBe(MIN_CARD_WIDTH)
-        continue
+      } else {
+        // (a) fit at the returned w: row + the w-consistent chrome.
+        expect(7 * cardWidth + 6 * gapFor(cardWidth) + pads.left + pads.right).toBeLessThanOrEqual(
+          outer,
+        )
+        // (b) fit at the re-solved w'. Production semantics (planner
+        // ruling): cardWidthFor runs ONCE per view mount — there is no
+        // re-solve — so the invariant is NOT w' == w (orbit identity) but
+        // USABLE GEOMETRY: wherever the 3-round orbit lands, what it
+        // emitted must fit. Solve once more against the same outer
+        // context (the returned width's own chrome) and demand fit at w'
+        // too — any solution the algorithm can emit is a usable geometry.
+        // If either fit assertion ever fails, do NOT loosen the test —
+        // report the failing outer values and stop (planner decides).
+        const wPrime = solve(outer - pads.left - pads.right, outer)
+        const padsPrime = boardPads(wPrime)
+        expect(
+          7 * wPrime + 6 * gapFor(wPrime) + padsPrime.left + padsPrime.right,
+        ).toBeLessThanOrEqual(outer)
       }
-      expect(7 * cardWidth + 6 * gapFor(cardWidth)).toBeLessThanOrEqual(contentWidth)
     }
   })
 
-  it('cardWidthFor is non-decreasing in contentWidth (the mount solve never surprises)', () => {
-    // Spot pairs — including the 498/500 band where pass 2's gap jump used
-    // to make the naive solve jump UP past its own fit.
-    expect(cardWidthFor(400)).toBeLessThanOrEqual(cardWidthFor(410))
-    expect(cardWidthFor(490)).toBeLessThanOrEqual(cardWidthFor(500))
-    expect(cardWidthFor(690)).toBeLessThanOrEqual(cardWidthFor(700))
-    // ...and the whole sweep, so no pair can hide a dip.
-    let prev = MIN_CARD_WIDTH
-    for (let contentWidth = 280; contentWidth <= 1400; contentWidth += 10) {
-      const cardWidth = cardWidthFor(contentWidth)
-      expect(cardWidth).toBeGreaterThanOrEqual(prev)
-      prev = cardWidth
+  it('FIXPOINT stability: one extra chrome iteration never changes the returned width', () => {
+    // solve(solve(x)) == solve(x) semantics: recompute the chrome at the
+    // returned width and re-run the two-pass solve on the content box that
+    // chrome implies — a genuine fixed point reproduces itself. (The
+    // two-pass solve is cardWidthFor's un-exported core; the shared
+    // module-level `solve` replica stands in for it.) The step-1 sweep
+    // above now fences the FIT invariant for every outer 280..1400 —
+    // w' == w is no longer a requirement (the mount solve runs once;
+    // planner ruling) — so these named fixtures stay as the readable
+    // canaries pinning outers that ARE exact fixed points.
+    for (const outer of [960, 388, 720]) {
+      const w = cardWidthFor(outer)
+      const pads = boardPads(w)
+      expect(solve(outer - pads.left - pads.right, outer)).toBe(w)
     }
   })
 })

@@ -33,11 +33,46 @@ export const MIN_CARD_WIDTH = 42
 /** The laptop-era keeper card width (D10) — the solve's ceiling. */
 export const MAX_CARD_WIDTH = 90
 
-/** The inter-column gap for a card width: proportional to the classic
- *  12px-at-90px ratio, clamped to [4, 12] — tiny cards keep a tappable
- *  gutter, big cards never sprawl. Pure; no window reads. */
+/** The inter-column gap for a card width (v0.5.1): a linear ramp from the
+ *  42px card-width floor — round((w − 42)/4), clamped to [4, 12]. Phones
+ *  get a flat 4px tap-gutter floor (the old proportional 12/90 gap shrank
+ *  toward 4 only near the floor and starved the row of breathing room);
+ *  the ramp preserves the proportional-above-keeper feel at the top end
+ *  (86 → 11, 90 → 12 — byte-identical desktop). Pure; no window reads. */
 export function gapFor(cardWidth: number): number {
-  return Math.min(12, Math.max(4, Math.round((cardWidth * 12) / 90)))
+  return Math.min(12, Math.max(4, Math.round((cardWidth - 42) / 4)))
+}
+
+/** The waste right-fan step for a card width (v0.5.1): round(w · 14/90) —
+ *  the desktop 90px card keeps the v0.4.8 14px step byte-identical; a
+ *  48px phone card fans at 7px. THE shared fan geometry: the board render
+ *  AND the flight-landing offsets both consume this function (the v0.4.3
+ *  lesson — predictions must use the same pure function the board
+ *  renders, or flights misland). Pure; no window reads. */
+export function wasteFanStep(cardWidth: number): number {
+  return Math.round((cardWidth * 14) / 90)
+}
+
+/** The depth-sliver extent for a card width (v0.5.1): round(w · 12/90) —
+ *  12px at the desktop 90px card (byte-identical to the v0.4.8/v0.4.9
+ *  fixed extents), 6px at 48. The board renders the >3-cards sliver at
+ *  half this extent and the >10-cards sliver at the full extent, peeking
+ *  left of the pile; boardPads reserves extent + 4 on the board's left.
+ *  Pure; no window reads. */
+export function sliverExtent(cardWidth: number): number {
+  return Math.round((cardWidth * 12) / 90)
+}
+
+/** The .board inline horizontal paddings for a card width (v0.5.1): the
+ *  proportional chrome reserved for the depth slivers (left =
+ *  sliverExtent + 4) and the waste right-fan (right = 2 fan steps + 4) —
+ *  both exist solely to keep the fan/sliver overhangs inside the board's
+ *  box so the scroller never grows a horizontal bar. At the desktop 90px
+ *  card this yields {left: 16, right: 32} — byte-identical to the fixed
+ *  CSS constants it replaced (which remain as the no-JS fallback).
+ *  Pure; no window reads. */
+export function boardPads(cardWidth: number): { left: number; right: number } {
+  return { left: sliverExtent(cardWidth) + 4, right: 2 * wasteFanStep(cardWidth) + 4 }
 }
 
 /** The .game-screen horizontal padding for a viewport width — the JS mirror
@@ -50,29 +85,76 @@ export function gameScreenPadX(innerWidth: number): number {
   return innerWidth <= 520 ? 12 : 24
 }
 
-/** The card width that fits 7 columns + 6 gaps inside `contentWidth` —
- *  the board's CONTENT-BOX width (the caller unwinds the .game-screen and
- *  .board paddings first; this function knows no CSS).
- *
- *  MOUNT-CONSTANT CONTRACT: like columnHeightFor, this is captured ONCE
- *  per view mount — viewport changes mid-game must not reflow the table.
- *
- *  Two-pass joint solve (card width and gap depend on each other): pass 1
- *  sizes the card at the 7.8 divisor (7 columns + 6 gaps at the 12/90 gap
- *  ratio); pass 2 re-solves with the real gap that width implies. Returns
- *  min(w1, w2): pass 2's floor guarantees 7*w2 + 6*g1 <= contentWidth, but
- *  the returned width pays the gap of its OWN size — when pass 2 moved the
- *  width UP past w1, gapFor(w2) can exceed g1 (e.g. contentWidth = 498:
- *  w2 = 64 wants a 9px gap → 502 > 498), and in that regime w1 provably
- *  fits, so the smaller of the two is the safe answer. Below the physical
- *  floor 7*MIN_CARD_WIDTH + 6*gapFor(MIN_CARD_WIDTH) the MIN clamp binds —
- *  callers get the floor and the scroller absorbs the overflow. */
-export function cardWidthFor(contentWidth: number): number {
+/** The two-pass joint solve for one CONTENT width (card width and gap
+ *  depend on each other): pass 1 sizes the card at the 7.8 divisor
+ *  (7 columns + 6 gaps at the 12px keeper gap); pass 2 re-solves with the
+ *  real gap that width implies. Pass 2's candidate w2 wins only under the
+ *  GUARD: gapFor(w2) <= g1 AND the full row INCLUDING the w2-consistent
+ *  chrome (boardPads(w2)) fits the actual board outer. Without the guard,
+ *  the historical min(w1, w2) conservatism left exact-fit slack on the
+ *  table (a 388 outer solved to 46 where 48 fits exactly — the chrome is
+ *  flat across 46→48, so the row landed at 388 == outer only at 48);
+ *  with it, the upgrade provably never overflows the outer box. Below
+ *  the physical content floor 7*MIN_CARD_WIDTH +
+ *  6*gapFor(MIN_CARD_WIDTH) the MIN clamp binds — the caller gets the
+ *  floor and the scroller absorbs the overflow. Private core of
+ *  cardWidthFor; not exported. */
+function solveCardWidth(contentWidth: number, boardOuter: number): number {
   const w1 = Math.min(MAX_CARD_WIDTH, Math.max(MIN_CARD_WIDTH, Math.floor(contentWidth / 7.8)))
   const g1 = gapFor(w1)
   const w2 = Math.min(
     MAX_CARD_WIDTH,
     Math.max(MIN_CARD_WIDTH, Math.floor((contentWidth - 6 * g1) / 7)),
   )
+  const pads2 = boardPads(w2)
+  if (gapFor(w2) <= g1 && 7 * w2 + 6 * gapFor(w2) + pads2.left + pads2.right <= boardOuter) {
+    return w2
+  }
   return Math.min(w1, w2)
+}
+
+/** The card width that fits a BOARD OUTER width (v0.5.1 contract): the
+ *  post-game-screen-pad board box, already capped at its 960px CSS
+ *  max-width by the caller — this function knows no CSS. The board's
+ *  reserved chrome (depth slivers + waste fan, via boardPads) is
+ *  PROPORTIONAL to the card width, so card width and chrome co-depend:
+ *  fixed-point iteration resolves it — start at the keeper width, then
+ *  three rounds of { pads ← boardPads(w); content ← outer − pads;
+ *  w ← solveCardWidth(content, outer) }. The guarded solve only ever
+ *  returns a width whose FULL row + its own chrome fits the actual outer
+ *  (or the conservative min-pass answer otherwise), and chrome is
+ *  monotone in w. The orbit need not reach a fixed point (see KNOWN
+ *  QUIRK below) — fit is what the sweep guarantees: the step-1 sweep in
+ *  layout.test.ts fences fit at the returned width AND at the re-solved
+ *  width for every outer 280..1400. The desktop 960px outer is a stable
+ *  fixed point at 90 —
+ *  boardPads(90) = {16, 32} → content 912 → solve → 90 (D10: byte-
+ *  identical laptop layout). A 412px phone (388 outer) converges to 48 —
+ *  the exact-fit fixed point: the chrome is flat across 46→48
+ *  (boardPads(48) = {10, 18}), so 7*48 + 6*4 + 28 = 388 lands exactly on
+ *  the outer — up from the v0.5.0 43px.
+ *
+ *  MOUNT-CONSTANT CONTRACT: like columnHeightFor, this is captured ONCE
+ *  per view mount — viewport changes mid-game must not reflow the table.
+ *
+ *  KNOWN QUIRK — NOT monotone in the outer: at the gap-ramp's rounding
+ *  boundaries the answer can DIP as the outer grows (18 such dips across
+ *  280..1400, e.g. outer 401 → 49 but 402 → 47). Cosmetic by contract:
+ *  the solve runs once per mount against the device's real viewport (see
+ *  MOUNT-CONSTANT CONTRACT above), so widths are never re-ordered in the
+ *  field — the invariant that matters is FIT at the returned width, which
+ *  the step-1 sweep in layout.test.ts fences at both the returned w and
+ *  the re-solved w' for every outer 280..1400.
+ *
+ *  Below the physical outer floor 7*MIN_CARD_WIDTH +
+ *  6*gapFor(MIN_CARD_WIDTH) + boardPads(MIN_CARD_WIDTH) the MIN clamp
+ *  binds — callers get the floor and the scroller absorbs the overflow. */
+export function cardWidthFor(boardOuter: number): number {
+  let w = MAX_CARD_WIDTH
+  for (let i = 0; i < 3; i++) {
+    const pads = boardPads(w)
+    const content = boardOuter - pads.left - pads.right
+    w = solveCardWidth(content, boardOuter)
+  }
+  return w
 }
