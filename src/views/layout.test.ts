@@ -17,6 +17,7 @@ import {
   fanOffsetIn,
   gameScreenPadX,
   gapFor,
+  reserveSliverOffsets,
   sliverExtent,
   wasteFanStep,
 } from './layout'
@@ -204,6 +205,62 @@ describe('layout — mount-time card sizing (L2 mobile pass, v0.5.1 proportional
       const w = cardWidthFor(outer)
       const pads = boardPads(w)
       expect(solve(outer - pads.left - pads.right, outer)).toBe(w)
+    }
+  })
+})
+
+describe('layout — reserve depth-sliver ladder (v0.5.2)', () => {
+  it('ladder table: 0-1 cards cue nothing, 2-3 one sliver, 4-10 two, 11+ three', () => {
+    // The v0.4.9 squared reserve showed zero cues below 4 cards (the field
+    // report: a 2-3-card reserve read as a single face-up card). The ladder
+    // must cue every populated count up to the full 13-card deal.
+    expect(reserveSliverOffsets(0, 12)).toEqual([])
+    expect(reserveSliverOffsets(1, 12)).toEqual([])
+    expect(reserveSliverOffsets(2, 12)).toHaveLength(1)
+    expect(reserveSliverOffsets(3, 12)).toHaveLength(1)
+    expect(reserveSliverOffsets(4, 12)).toHaveLength(2)
+    expect(reserveSliverOffsets(10, 12)).toHaveLength(2)
+    expect(reserveSliverOffsets(11, 12)).toHaveLength(3)
+    expect(reserveSliverOffsets(13, 12)).toHaveLength(3)
+  })
+
+  it('exact offsets at the desktop extent 12: [-4] / [-4,-8] / [-4,-8,-12]', () => {
+    expect(reserveSliverOffsets(2, 12)).toEqual([-4])
+    expect(reserveSliverOffsets(3, 12)).toEqual([-4])
+    expect(reserveSliverOffsets(4, 12)).toEqual([-4, -8])
+    expect(reserveSliverOffsets(10, 12)).toEqual([-4, -8])
+    expect(reserveSliverOffsets(11, 12)).toEqual([-4, -8, -12])
+    expect(reserveSliverOffsets(13, 12)).toEqual([-4, -8, -12])
+  })
+
+  it('exact offsets at the phone extent 6: [-2] / [-2,-4] / [-2,-4,-6]', () => {
+    expect(reserveSliverOffsets(2, 6)).toEqual([-2])
+    expect(reserveSliverOffsets(3, 6)).toEqual([-2])
+    expect(reserveSliverOffsets(4, 6)).toEqual([-2, -4])
+    expect(reserveSliverOffsets(10, 6)).toEqual([-2, -4])
+    expect(reserveSliverOffsets(11, 6)).toEqual([-2, -4, -6])
+    expect(reserveSliverOffsets(13, 6)).toEqual([-2, -4, -6])
+  })
+
+  it('MONOTONE-EXTENDS: each band is a prefix of the next, and every offset stays within sliverExtent', () => {
+    // Prefix property: the render never moves an existing sliver when the
+    // count crosses a band boundary — cards only ever ADD strips. The
+    // bound fence pins the containment contract: no offset peeks right of
+    // the slot and the deepest never exceeds sliverExtent, so the board's
+    // reserved left pad (sliverExtent + 4) holds every band with no layout
+    // shift. (Math.round can yield -0 at sub-production extents — 0 is the
+    // correct bound, not -1; production extents are sliverExtent(42..90)
+    // = 6..12.)
+    for (let extent = 1; extent <= 12; extent++) {
+      const one = reserveSliverOffsets(2, extent)
+      const two = reserveSliverOffsets(4, extent)
+      const three = reserveSliverOffsets(11, extent)
+      expect(two.slice(0, one.length)).toEqual(one)
+      expect(three.slice(0, two.length)).toEqual(two)
+      for (const left of three) {
+        expect(left).toBeLessThanOrEqual(0)
+        expect(left).toBeGreaterThanOrEqual(-extent)
+      }
     }
   })
 })

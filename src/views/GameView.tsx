@@ -63,7 +63,7 @@ import type { FlightSpeed } from '../settings'
 import { groupMoves, quickMove } from '../games/gameViews'
 import type { GameViewConfig, GameState } from '../games/gameViews'
 import { flightPlan } from './flights'
-import { boardPads, cardWidthFor, columnHeightFor, fanOffsetIn, gameScreenPadX, gapFor, sliverExtent, wasteFanStep } from './layout'
+import { boardPads, cardWidthFor, columnHeightFor, fanOffsetIn, gameScreenPadX, gapFor, reserveSliverOffsets, sliverExtent, wasteFanStep } from './layout'
 
 interface GameViewProps {
   /** The per-game view config (definition + session + presentation glue). */
@@ -874,16 +874,17 @@ function GameView({
           style={cellStyle(hint, height)}
           onClick={isTarget ? () => drop(hint.pileId) : emptyReserveClick}
         >
-          {/* Reserve depth slivers (v0.4.9): the squared stack shows its bulk
-              via the same edge strips the waste fan uses — first children, so
-              they paint behind the stack. Extents are the shared mount-
-              derived sliver (v0.5.1): half extent at >3 cards, full at >10. */}
-          {isReserve && cards.length > 3 && (
-            <div className="waste-depth" style={{ left: -sliver / 2 }} aria-hidden="true" />
-          )}
-          {isReserve && cards.length > 10 && (
-            <div className="waste-depth" style={{ left: -sliver }} aria-hidden="true" />
-          )}
+          {/* Reserve depth slivers (v0.4.9, v0.5.2 ladder): the squared stack
+              shows its bulk via the same edge strips the waste fan uses —
+              first children, so they paint behind the stack. Offsets come
+              from the pure reserveSliverOffsets ladder (layout.ts): one
+              sliver below 4 cards (the v0.5.1 gap — a 2-3-card reserve had
+              no cue and read as a single card), two mid-stack, three at the
+              full stack; the deepest stays inside the board's left pad. */}
+          {isReserve &&
+            reserveSliverOffsets(cards.length, sliver).map((left, k) => (
+              <div key={k} className="waste-depth" style={{ left }} aria-hidden="true" />
+            ))}
           {/* Drop-target landing outline: card-sized, at the attachment point
               (top = cards.length * offset) — marks where the dropped card
               lands without lighting up the whole column. */}

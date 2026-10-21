@@ -63,6 +63,26 @@ export function sliverExtent(cardWidth: number): number {
   return Math.round((cardWidth * 12) / 90)
 }
 
+/** The reserve depth-sliver LEFT offsets for a squared stack of
+ *  `cardCount` cards (v0.5.2): the 3px .waste-depth strips peeking left of
+ *  the reserve slot, negative relative to the slot's left edge. Ladder:
+ *  [] at count <= 1 (nothing to cue), one at -extent/3 for 2-3 cards (the
+ *  v0.5.1 gap — a 2-3-card reserve had no cue at all and read as a single
+ *  card, per the field report), two at -extent/3 and -2·extent/3 for 4-10,
+ *  and three through the full extent at >= 11. Each offset is Math.round-
+ *  ed (sliverExtent's rounding style); the deepest never exceeds
+ *  sliverExtent, so the board's reserved left pad (sliverExtent + 4)
+ *  contains every band — no boardPads change, no layout shift. Pure; no
+ *  window reads. */
+export function reserveSliverOffsets(cardCount: number, sliverExtent: number): number[] {
+  if (cardCount <= 1) return []
+  const third = Math.round(-sliverExtent / 3)
+  const twoThirds = Math.round((-2 * sliverExtent) / 3)
+  if (cardCount <= 3) return [third]
+  if (cardCount <= 10) return [third, twoThirds]
+  return [third, twoThirds, -sliverExtent]
+}
+
 /** The .board inline horizontal paddings for a card width (v0.5.1): the
  *  proportional chrome reserved for the depth slivers (left =
  *  sliverExtent + 4) and the waste right-fan (right = 2 fan steps + 4) —
