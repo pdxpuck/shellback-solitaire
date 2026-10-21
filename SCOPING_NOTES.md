@@ -244,3 +244,13 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
 
 ### FIX (v0.4.11): foundation glyph showed the raw rank integer
 - User report: the base-rank glyph read '11' for J and '1' for A. The glyph rendered baseRank(world) raw. Now labeled via deckhand's exported RANK_LABELS (display labels indexed by rank — the deckhand route of the two the fix spec allowed, so no local map and no new test; it is deckhand's tested surface).
+
+### L-phase (layout pass) scoped — decisions D8-D11 recorded 2026-10-21, implementation pending
+- Session goal (user): get the layout correct BEFORE adding new games — game #3 is blocked on this pass plus the GAME_CHECKLIST §8 phone gate.
+- L1 audit verdict: the board math is already parameterized by card size (layout.ts pure functions, mount-time capture); the single blocker is the hard-coded CARD_WIDTH = 90 (GameView.tsx) against a fixed 7-column grid — ~750px minimum board width overflows a phone (~412px viewport). Everything downstream (cardHeight, fan compression, flights, drag ghost) is proportional to card size, so deriving card width at mount fixes the whole chain.
+- D8 — card sizing: derive card width from the measured board width at view mount, clamped [~42px … 90px]. Ruling: try-and-see — land it, judge on the phone.
+- D9 — portrait-first: portrait is the default/primary design target (user: "I have played many card games in portrait, it should be able to work"); no landscape-specific design work this pass.
+- D10 — laptop verdict: the current laptop layout (90px cards, 960px board) is the keeper; no outstanding gripes.
+- D11 — toolbar: keep it simple this pass (the existing flex-wrap is acceptable); the toolbar needs a full redesign for all platforms anyway — future work, explicitly out of this pass's scope.
+- Plan: L1 spec + decisions (this section) → L2 implement (cardWidthFor pure function + tests, proportional gap scaling, responsive pass on win banner/rules panel, all 134 existing tests stay green) → L3 deploy + phone gate via the live PWA (also retires the pending v0.3.20 slow-mo ghost z-order check via ?slowmo=4) → L4 commit batch (tracker update, version 0.5.0 proposed, .gitignore screenshots/).
+- Baseline at scoping: 7a4bb86 (v0.4.11), 134/134 tests, build + lint clean, tree clean except the untracked screenshots/ directory.
