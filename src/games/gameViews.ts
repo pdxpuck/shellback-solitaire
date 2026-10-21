@@ -198,8 +198,8 @@ const CANFIELD_PILE_LABELS: Readonly<Record<string, string>> = {
   t1: 'Working stack',
   t2: 'Working stack',
   t3: 'Working stack',
-  stock: 'Stock — deals 3',
-  waste: 'Waste — top plays',
+  stock: 'Stock',
+  waste: 'Waste',
 }
 
 const KLONDIKE_VIEW: GameViewConfig = {

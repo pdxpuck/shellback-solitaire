@@ -307,6 +307,10 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
   and an action-free RulesPanel stays context-neutral between the home
   (pre-play) and in-game (mid-play) usages.
 
+### FIX (v0.5.4): adjacent single-cell chips overlapped on Canfield
+- User report (live, phone + laptop): Canfield's stock/waste chips ('Stock — deals 3' / 'Waste — top plays') collided — a max-content pill centered on one 44px cell overhangs into its neighbors, and adjacent single-pile runs left nowhere to go. Klondike's short labels never collided; this was Canfield-only in practice.
+- Fix (user directive): truncate the two Canfield labels to 'Stock' / 'Waste' — the deals-3 and top-plays semantics already live in the rules prose. GAME_CHECKLIST section 7 gains the length lesson for future games.
+
 ### BACKLOG: home-grid evolution (captured 2026-10-21, user)
 - Family color-coding on game tiles (a partial slice is possible pre-D6).
 - Grid filtering by type / winnability / least played.
