@@ -184,6 +184,12 @@ body {
   font-size: 0.85rem;
 }
 
+/* The summary's Play/Preview + Rules pair (v0.5.3): buttons carry no
+   default margins, so adjacent ones get their spacing here. */
+.game-summary button + button {
+  margin-left: 8px;
+}
+
 /* ---- settings ---- */
 
 .theme-list {
@@ -575,11 +581,13 @@ body {
   font-size: 1.2rem;
 }
 
-/* The generated layout diagram: one tinted box per pile, label beneath.
-   7 columns covers both shipped games — the column size lives HERE (44px,
-   38px on phones via the ≤520px media query below) so the responsive size
-   applies; GameView inlines a template only for layouts off the 7-column
-   default. */
+/* The generated layout diagram: one tinted box per pile, plus ONE label
+   chip per horizontal RUN of same-role piles (rulesLayout runGrouping,
+   v0.5.3) centered OVER its boxes — the v0.4.10 label-under-every-box
+   rows read as clutter. 7 columns covers both shipped games — the column
+   size lives HERE (44px, 38px on phones via the ≤520px media query below)
+   so the responsive size applies; RulesPanel inlines a template only for
+   layouts off the 7-column default. */
 .rules-map {
   display: grid;
   grid-template-columns: repeat(7, 44px);
@@ -595,33 +603,49 @@ body {
   border-radius: 4px;
 }
 
+/* Role fills (v0.5.3): one distinct hue per role, medium saturation — the
+   old stock/waste/reserve were three rgba(0,0,0,x) grays that read as
+   shades of one color. Bright enough to differentiate, not neon. */
 .rules-cell.rules-stock {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(217, 119, 6, 0.3);
 }
 
 .rules-cell.rules-waste {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(13, 148, 136, 0.3);
 }
 
 .rules-cell.rules-reserve {
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(124, 58, 237, 0.3);
 }
 
 .rules-cell.rules-foundation {
-  background: rgba(37, 99, 235, 0.25);
+  background: rgba(37, 99, 235, 0.35);
 }
 
 .rules-cell.rules-tableau {
-  background: rgba(30, 123, 52, 0.22);
+  background: rgba(22, 163, 74, 0.32);
 }
 
-.rules-label {
-  display: block;
+/* The run chip (v0.5.3): one translucent pill per horizontal run of
+   same-role piles, centered over its run of boxes (grid placement is
+   inline in RulesPanel — it spans the run's columns). pointer-events none
+   keeps the decorative diagram inert; nowrap + max-content let a
+   single-cell chip ("Stock", "Waste") fit (symmetrically overhang, never
+   wrap) its 44px cell. */
+.rules-chip {
+  z-index: 1;
+  align-self: center;
+  justify-self: center;
+  width: max-content;
+  padding: 1px 6px;
+  border: 1px solid #b5b5b5;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #333;
   font-size: 0.6rem;
-  color: #444;
-  text-align: center;
-  line-height: 1.1;
-  overflow-wrap: break-word;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .rules-intro {

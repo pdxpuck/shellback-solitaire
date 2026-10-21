@@ -1,11 +1,16 @@
 /**
  * HomeView — collection landing page: game grid + highlight panel.
  * Tiles select; the panel below shows the selected game's summary and,
- * when a game is playable, its Play/Preview button.
+ * when a game is playable, its Play/Preview button plus a Rules button
+ * (v0.5.3): the rules open as an overlay IN PLACE on the home page so a
+ * player can review them BEFORE committing to play — user ruling,
+ * verbatim: "Never deal cards to a player until they decide to play."
  */
 import { useState } from 'react'
 import { FAMILY_LABELS, REGISTRY, WINNABILITY_LABELS } from '../games/registry'
 import type { GameMeta, GameStatus, Winnability } from '../games/registry'
+import { gameConfigFor } from '../games/gameViews'
+import RulesPanel from './RulesPanel'
 
 interface HomeViewProps {
   onOpenSettings: () => void
@@ -33,6 +38,14 @@ function HomeView({ onOpenSettings, onPlay }: HomeViewProps) {
   const selected: GameMeta | null = selectedId
     ? (REGISTRY.find((g) => g.id === selectedId) ?? null)
     : null
+  /** The game whose rules are open as a home-page overlay; null = closed.
+   *  Rules is review-only — it never navigates into the game. */
+  const [rulesGameId, setRulesGameId] = useState<string | null>(null)
+  /** The open overlay's config — present only when rulesGameId names a
+   *  game with a view config (the same gate as the Rules button itself). */
+  const rulesConfig = rulesGameId !== null ? gameConfigFor(rulesGameId) : undefined
+  const rulesTitle =
+    rulesGameId !== null ? (REGISTRY.find((g) => g.id === rulesGameId)?.title ?? rulesGameId) : ''
 
   return (
     <>
@@ -77,7 +90,32 @@ function HomeView({ onOpenSettings, onPlay }: HomeViewProps) {
               {selected.status === 'development' ? 'Preview' : 'Play'}
             </button>
           )}
+          {/* Review-before-play (v0.5.3): shown only for games that have a
+              view config to show — in practice the same games as Play (a
+              config exists exactly when status !== 'planned'), gated on the
+              config itself so a future registry/config drift degrades to a
+              missing Rules button, never a blank overlay. */}
+          {gameConfigFor(selected.id) !== undefined && (
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => setRulesGameId(selected.id)}
+            >
+              Rules
+            </button>
+          )}
         </section>
+      )}
+
+      {/* The home rules overlay: the SAME panel the game screen uses, in
+          place — no navigation, no deal (see the header ruling). */}
+      {rulesConfig !== undefined && (
+        <RulesPanel
+          title={rulesTitle}
+          definition={rulesConfig.definition}
+          config={rulesConfig}
+          onClose={() => setRulesGameId(null)}
+        />
       )}
 
       <footer className="version-footer">

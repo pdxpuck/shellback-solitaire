@@ -265,3 +265,51 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
 ### FIX (v0.5.2): reserve depth cue blind in the 2-3 card range
 - User report (laptop, Canfield): the reserve "starts out fanned, but later in the game it appears as a single face up card" — the v0.4.9 squared stack's only depth cues (.waste-depth slivers at >3/>10 cards) left the 2-3 range with zero indication.
 - Fix: new pure export reserveSliverOffsets(count, extent) — a 3-band ladder ([] at ≤1 card; 1 strip at 2-3; 2 strips at 4-10; 3 strips at ≥11) at tightened offsets (−⅓ / −⅔ / −full extent) that stay inside the existing left padding (no layout shift, desktop untouched); the reserve branch maps it; the waste branch (fan + its 2-band slivers) is byte-untouched. The squared stack itself stays — the v0.4.9 real-Canfield ruling. Tests 140 → 144.
+
+### FEATURE (v0.5.3): rules-map chips + brighter roles + home Rules access (2026-10-21)
+- User feedback on the v0.4.10 rules panel: the per-pile labels beneath every
+  diagram box were cluttered, and the role fills were hard to differentiate —
+  stock/waste/reserve were three rgba(0,0,0,x) grays (0.25/0.10/0.35), i.e.
+  shades of one color, not three colors.
+- Chip-per-run diagram: labels now render as ONE translucent pill per
+  horizontal RUN of same-role piles, centered over its boxes, instead of a
+  label under every box. The grouping rule is deliberately simple (user
+  directive: "don't overcomplicate it but keep it readable"): piles merge
+  only when same role + same row + consecutive columns; any break (role,
+  row, column gap) splits the run and everything else degrades to
+  single-pile runs — so a split-roles layout (future FreeCell: cells left +
+  foundations right) gets one chip per run with no special-casing. Pure
+  grouping in src/views/rulesLayout.ts (runGrouping) + unit tests;
+  gameViews.test.ts gains a coverage invariant (every layout pile in
+  exactly one run). Diagram geometry unchanged: 44px cells / 8px gap /
+  7-column default, 38px under the ≤520px media query.
+- Brighter role hues — one hue per role, medium saturation (user: "they
+  don't need to be bold, but they should be easier to differentiate"):
+  stock amber rgba(217,119,6,0.30), waste teal rgba(13,148,136,0.30),
+  reserve violet rgba(124,58,237,0.30), foundation blue rgba(37,99,235,0.35),
+  tableau green rgba(22,163,74,0.32).
+- RulesPanel extracted from GameView (owns its Esc-to-dismiss listener; the
+  panel is mounted only while open) — and the HOME page gains a Rules
+  button beside Play/Preview for any game with a view config
+  (gameConfigFor lookup): the panel opens as an overlay IN PLACE on the
+  home page, review-only, never navigating into the game. User ruling,
+  recorded verbatim: "Never deal cards to a player until they decide to
+  play."
+- Preview/Play naming CONFIRMED unchanged (user): Preview until the game
+  ships to 'available', then Play.
+- Interaction contract (user clarification, same day): Play/Preview deals cards
+  immediately; Rules reviews only. The rules screen carries NO play action — a
+  player who wants to play returns to the games list and presses Play/Preview
+  themselves. Ruled for now (user: "the latter makes more sense to me, but it
+  is debatable"); revisiting later is cheap (an optional onPlay prop rendered
+  only on the home usage).
+- v0.4.10's in-game toolbar Rules button is unchanged — the panel is shared,
+  and an action-free RulesPanel stays context-neutral between the home
+  (pre-play) and in-game (mid-play) usages.
+
+### BACKLOG: home-grid evolution (captured 2026-10-21, user)
+- Family color-coding on game tiles (a partial slice is possible pre-D6).
+- Grid filtering by type / winnability / least played.
+- Favorites.
+- NOTE: "least played" and "favorites" are gated on the deferred D6
+  persistence decision (win/loss stats) — both need per-game play history.

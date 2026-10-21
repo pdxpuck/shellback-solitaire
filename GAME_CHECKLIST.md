@@ -45,7 +45,7 @@ added by working top to bottom.
 
 ## 7. Rules panel (shipped v0.4.10; per-game content is enforced by the gameViews config-invariant tests)
 - [ ] Player-facing rules text distilled from the digest
-- [ ] Pile labels for the layout diagram (reserve, working stacks, stock, waste, foundations — the user could not name the reserve; the panel is the fix)
+- [ ] Pile labels for the layout diagram (reserve, working stacks, stock, waste, foundations — the user could not name the reserve; the panel is the fix). Since v0.5.3 the labels render as chips overlapping horizontal runs of same-role piles (rulesLayout runGrouping) — provide a pileLabels entry per pile; same-role neighbors sharing one entry merge into a single chip automatically
 
 ## 8. Ship gates
 - [ ] `npm run build` / `test` / `lint` green

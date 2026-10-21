@@ -228,9 +228,18 @@ export const GAME_VIEWS: Readonly<Record<string, GameViewConfig | undefined>> = 
   canfield: CANFIELD_VIEW,
 }
 
+/** The view config for a registry game id, or undefined when the game has
+ *  no view yet (registry status 'planned'). The home page's Rules button
+ *  gates on this (v0.5.3) — rules are reviewable only for games that can
+ *  actually be dealt (user ruling: "Never deal cards to a player until
+ *  they decide to play"). */
+export function gameConfigFor(gameId: string): GameViewConfig | undefined {
+  return GAME_VIEWS[gameId]
+}
+
 /** The view config for a registry game id; throws on an unknown id. */
 export function gameViewConfig(gameId: string): GameViewConfig {
-  const config = GAME_VIEWS[gameId]
+  const config = gameConfigFor(gameId)
   if (config === undefined) throw new Error(`No game view for: "${gameId}"`)
   return config
 }
