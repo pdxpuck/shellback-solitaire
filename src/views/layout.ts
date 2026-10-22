@@ -90,8 +90,15 @@ export function reserveSliverOffsets(cardCount: number, sliverExtent: number): n
  *  box so the scroller never grows a horizontal bar. At the desktop 90px
  *  card this yields {left: 16, right: 32} — byte-identical to the fixed
  *  CSS constants it replaced (which remain as the no-JS fallback).
+ *  depthChrome=false (default true) reserves NOTHING ({0, 0}) for games
+ *  whose layout has no waste/reserve roles — no fan/sliver overhangs
+ *  exist to contain (FreeCell's 8-column board is the motivating case).
  *  Pure; no window reads. */
-export function boardPads(cardWidth: number): { left: number; right: number } {
+export function boardPads(
+  cardWidth: number,
+  depthChrome = true,
+): { left: number; right: number } {
+  if (!depthChrome) return { left: 0, right: 0 }
   return { left: sliverExtent(cardWidth) + 4, right: 2 * wasteFanStep(cardWidth) + 4 }
 }
 
@@ -106,28 +113,34 @@ export function gameScreenPadX(innerWidth: number): number {
 }
 
 /** The two-pass joint solve for one CONTENT width (card width and gap
- *  depend on each other): pass 1 sizes the card at the 7.8 divisor
- *  (7 columns + 6 gaps at the 12px keeper gap); pass 2 re-solves with the
- *  real gap that width implies. Pass 2's candidate w2 wins only under the
- *  GUARD: gapFor(w2) <= g1 AND the full row INCLUDING the w2-consistent
- *  chrome (boardPads(w2)) fits the actual board outer. Without the guard,
- *  the historical min(w1, w2) conservatism left exact-fit slack on the
- *  table (a 388 outer solved to 46 where 48 fits exactly — the chrome is
- *  flat across 46→48, so the row landed at 388 == outer only at 48);
- *  with it, the upgrade provably never overflows the outer box. Below
- *  the physical content floor 7*MIN_CARD_WIDTH +
- *  6*gapFor(MIN_CARD_WIDTH) the MIN clamp binds — the caller gets the
- *  floor and the scroller absorbs the overflow. Private core of
- *  cardWidthFor; not exported. */
-function solveCardWidth(contentWidth: number, boardOuter: number): number {
-  const w1 = Math.min(MAX_CARD_WIDTH, Math.max(MIN_CARD_WIDTH, Math.floor(contentWidth / 7.8)))
+ *  depend on each other): pass 1 sizes the card at the columns+0.8
+ *  divisor (columns columns + columns − 1 gaps at the 12px keeper gap);
+ *  pass 2 re-solves with the real gap that width implies. Pass 2's
+ *  candidate w2 wins only under the GUARD: gapFor(w2) <= g1 AND the full
+ *  row INCLUDING the w2-consistent chrome (boardPads(w2)) fits the actual
+ *  board outer. Without the guard, the historical min(w1, w2)
+ *  conservatism left exact-fit slack on the table (a 388 outer solved to
+ *  46 where 48 fits exactly — the chrome is flat across 46→48, so the row
+ *  landed at 388 == outer only at 48); with it, the upgrade provably
+ *  never overflows the outer box. Below the physical content floor
+ *  columns*MIN_CARD_WIDTH + (columns−1)*gapFor(MIN_CARD_WIDTH) the MIN
+ *  clamp binds — the caller gets the floor and the scroller absorbs the
+ *  overflow. Private core of cardWidthFor; not exported. */
+function solveCardWidth(contentWidth: number, boardOuter: number, columns: number): number {
+  const w1 = Math.min(
+    MAX_CARD_WIDTH,
+    Math.max(MIN_CARD_WIDTH, Math.floor(contentWidth / (columns + 0.8))),
+  )
   const g1 = gapFor(w1)
   const w2 = Math.min(
     MAX_CARD_WIDTH,
-    Math.max(MIN_CARD_WIDTH, Math.floor((contentWidth - 6 * g1) / 7)),
+    Math.max(MIN_CARD_WIDTH, Math.floor((contentWidth - (columns - 1) * g1) / columns)),
   )
   const pads2 = boardPads(w2)
-  if (gapFor(w2) <= g1 && 7 * w2 + 6 * gapFor(w2) + pads2.left + pads2.right <= boardOuter) {
+  if (
+    gapFor(w2) <= g1 &&
+    columns * w2 + (columns - 1) * gapFor(w2) + pads2.left + pads2.right <= boardOuter
+  ) {
     return w2
   }
   return Math.min(w1, w2)
@@ -135,12 +148,18 @@ function solveCardWidth(contentWidth: number, boardOuter: number): number {
 
 /** The card width that fits a BOARD OUTER width (v0.5.1 contract): the
  *  post-game-screen-pad board box, already capped at its 960px CSS
- *  max-width by the caller — this function knows no CSS. The board's
- *  reserved chrome (depth slivers + waste fan, via boardPads) is
- *  PROPORTIONAL to the card width, so card width and chrome co-depend:
- *  fixed-point iteration resolves it — start at the keeper width, then
- *  three rounds of { pads ← boardPads(w); content ← outer − pads;
- *  w ← solveCardWidth(content, outer) }. The guarded solve only ever
+ *  max-width by the caller — this function knows no CSS. `columns` sizes
+ *  the row solve (default 7); `depthChrome` gates the fan/sliver chrome
+ *  reservation via boardPads (default true). FreeCell (game #3) plays an
+ *  8-column board with NO waste fan and NO depth slivers, so it calls
+ *  cardWidthFor(outer, 8, false): boardPads reserves nothing and the row
+ *  solve divides by 8.8; every other game keeps the byte-identical
+ *  defaults. The board's reserved chrome (depth slivers + waste fan, via
+ *  boardPads) is PROPORTIONAL to the card width, so card width and chrome
+ *  co-depend: fixed-point iteration resolves it — start at the keeper
+ *  width, then three rounds of { pads ← boardPads(w, depthChrome);
+ *  content ← outer − pads; w ← solveCardWidth(content, outer, columns) }.
+ *  The guarded solve only ever
  *  returns a width whose FULL row + its own chrome fits the actual outer
  *  (or the conservative min-pass answer otherwise), and chrome is
  *  monotone in w. The orbit need not reach a fixed point (see KNOWN
@@ -166,15 +185,16 @@ function solveCardWidth(contentWidth: number, boardOuter: number): number {
  *  the step-1 sweep in layout.test.ts fences at both the returned w and
  *  the re-solved w' for every outer 280..1400.
  *
- *  Below the physical outer floor 7*MIN_CARD_WIDTH +
- *  6*gapFor(MIN_CARD_WIDTH) + boardPads(MIN_CARD_WIDTH) the MIN clamp
- *  binds — callers get the floor and the scroller absorbs the overflow. */
-export function cardWidthFor(boardOuter: number): number {
+ *  Below the physical outer floor columns*MIN_CARD_WIDTH +
+ *  (columns−1)*gapFor(MIN_CARD_WIDTH) + boardPads(MIN_CARD_WIDTH,
+ *  depthChrome) the MIN clamp binds — callers get the floor and the
+ *  scroller absorbs the overflow. */
+export function cardWidthFor(boardOuter: number, columns = 7, depthChrome = true): number {
   let w = MAX_CARD_WIDTH
   for (let i = 0; i < 3; i++) {
-    const pads = boardPads(w)
+    const pads = boardPads(w, depthChrome)
     const content = boardOuter - pads.left - pads.right
-    w = solveCardWidth(content, boardOuter)
+    w = solveCardWidth(content, boardOuter, columns)
   }
   return w
 }

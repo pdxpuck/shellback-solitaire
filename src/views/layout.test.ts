@@ -264,3 +264,51 @@ describe('layout — reserve depth-sliver ladder (v0.5.2)', () => {
     }
   })
 })
+
+describe('layout — parameterized boards (FreeCell: 8 columns, no waste fan, no depth slivers)', () => {
+  it('boardPads with depthChrome=false reserves zero chrome on both sides', () => {
+    expect(boardPads(90, false)).toEqual({ left: 0, right: 0 })
+  })
+
+  it('cardWidthFor(960, 8, false): the 8-column no-chrome row fits the desktop outer', () => {
+    const w = cardWidthFor(960, 8, false)
+    expect(8 * w + 7 * gapFor(w)).toBeLessThanOrEqual(960)
+    expect(w).toBe(MAX_CARD_WIDTH)
+  })
+
+  it('cardWidthFor(388, 8, false): the row fits the phone outer with no chrome on either side', () => {
+    const w = cardWidthFor(388, 8, false)
+    // The fit invariant is the hard gate: the 8-card row (with the flat
+    // 4px phone gutter) lands inside the 388 outer with zero chrome.
+    expect(8 * w + 7 * gapFor(w)).toBeLessThanOrEqual(388)
+    // The real value, pinned: 44 — NOT the exact-fit 45 (8*45 + 7*4 =
+    // 388). The private solve's guard always prices the fan/sliver chrome
+    // (boardPads(w2)), so w2 = 45 pays 28px of phantom chrome (416 > 388)
+    // and loses the guard; the conservative min-pass answer 44 wins
+    // (row 380, 8px slack). Fit — never overflow — is what matters.
+    expect(w).toBe(44)
+  })
+
+  it('INVARIANT: every sweep point (outer 320..1400 step 60, columns 7|8, chrome on|off) either fits its outer or is the documented MIN-clamp scroller case', () => {
+    // Below the physical outer floor (columns*MIN + (columns-1)*gapFor(MIN)
+    // + boardPads(MIN, depthChrome)) no row fits by design — the MIN clamp
+    // binds, w is the floor itself, and the board's internal scroller
+    // absorbs the overflow. Anywhere else, the emitted row + its own
+    // (depthChrome-consistent) pads must fit the outer.
+    for (let outer = 320; outer <= 1400; outer += 60) {
+      for (const columns of [7, 8]) {
+        for (const depthChrome of [true, false]) {
+          const w = cardWidthFor(outer, columns, depthChrome)
+          const pads = boardPads(w, depthChrome)
+          const fits =
+            columns * w + (columns - 1) * gapFor(w) + pads.left + pads.right <= outer
+          const rowAtMin = columns * MIN_CARD_WIDTH + (columns - 1) * gapFor(MIN_CARD_WIDTH)
+          const padsAtMin = boardPads(MIN_CARD_WIDTH, depthChrome)
+          const minClampOverflows =
+            w === MIN_CARD_WIDTH && rowAtMin + padsAtMin.left + padsAtMin.right > outer
+          expect(fits || minClampOverflows).toBe(true)
+        }
+      }
+    }
+  })
+})

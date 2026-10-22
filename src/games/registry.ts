@@ -51,6 +51,17 @@ export const REGISTRY: readonly GameMeta[] = [
       'A tougher cousin: foundations build up from a randomly-drawn base card and wrap ' +
       'around, fed by a 13-card reserve. History says it was named after a casino — it plays like one.',
   },
+  {
+    id: 'freecell',
+    title: 'FreeCell',
+    family: 'freecell',
+    winnability: 'very-high',
+    status: 'development',
+    summary:
+      'Almost every deal can be won — about 99.999% are solvable with perfect play, and all 52 ' +
+      'cards sit face up from the start. Four free cells hold stray cards while you plan ' +
+      'supermoves, rewarding planning over luck.',
+  },
 ]
 
 /** Look up a game by id; throws on an unknown id. */

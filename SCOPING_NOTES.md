@@ -315,8 +315,18 @@ Table cosmetics ladder (user idea 2026-10-15): felt default (v0.3.19) → table 
   v0.5.3/54 chips + role hues, and the home Rules overlay all read well on
   the 412px Pixel 8. L-phase gates: re-gate CLOSED; still open — the §8
   phone-playability verdict on a real deal, the v0.3.20 slow-mo ghost
-  z-order check (?slowmo=4), and the game #3 decision (user deferred to the
-  next session).
+   z-order check (?slowmo=4), and the game #3 decision (user deferred to the
+   next session).
+
+### GAME 3 — FreeCell built (v0.6.0, 2026-10-22)
+- PICK: user chose FreeCell 2026-10-22 (the docs had pointed at it twice — deal-number replay culture "FreeCell-style", and the v0.5.3 chip work anticipating "future FreeCell: cells left + foundations right"). Rules locked as DC1–DC7 BEFORE code in docs/FREECELL_RULES.md (GAME_CHECKLIST §1; Wikipedia rev 1372643794 as source). DC6 (one-way foundations) and DC7 (cell→cell excluded from legalMoves) flagged for play-gate review.
+- Definition (25 tests): all-52-face-up row-wise deal (7×4 + 6×4, card i → cascade i mod 8); suit-keyed foundations (♠♥♦♣ glyphs like Klondike); DC4 empty cascades take any card; DC2 supermoves with capacity C = 2^M × (N+1) — an empty destination excludes itself from M (the classic C/2 half); DC5 safe-fly rule r ≤ min(opposite-color foundation ranks) + 1 (empty = 0); DC6/DC7 exclusions enforced + tested; full 23-move emit-order pin.
+- DISPATCH INCIDENT (logged): the original monolithic Batch-2 dispatch returned EMPTY — the large-dispatch silent-empty failure shape documented in toolchain.json, first occurrence on this project. Tree verified clean (operator), spec split into 2a/2b, both clean. LESSON: keep code dispatches at ~2 files or split preemptively.
+- Layout parameterization (4 tests): solveCardWidth/cardWidthFor take a column count (default 7 = byte-identical); boardPads takes depthChrome (FreeCell has no waste fan/slivers → zero reserved chrome). Known conservative quirk: the solve guard still prices default chrome for no-chrome games — 44 vs 45px on a 388px outer, 8px slack, never overflow (pinned in layout.test.ts).
+- Session + wiring (20 tests): play.ts (SAVE_KEY shellback.freecell.save.v1; FreeCell is the second real safeFlights consumer — Canfield returned [] since DC5-there); flights-integration test on deal #1 (parking ♠5 off t5 exposes ♦1, which flies; autoFly:false suppresses); the checklist §6 replay-consistency walk (stepwise == batched, 8-move scripted legal walk). gameViews FREECELL_VIEW (chip labels 'Free cells'/'Foundations'/'Cascades'). GameView generalized by CONFIG ONLY (CB3): BOARD_COLUMNS = max(layout.col)+1 and hasDepthChrome = waste/reserve roles present — no per-game branches. RulesPanel confirmed already derived (mapCols) — zero changes. App.tsx resolves 'freecell' end-to-end.
+- GATES: 200/200 tests green (151 prior + 25 definition + 4 layout + 20 play), build + lint clean. (Baseline note: the suite was already 151 at session start — 7 post-v0.5.4 tests the scoping notes hadn't counted; this section supersedes that count.)
+- SHIP POSTURE: Preview on the home grid (status 'development'). 'Available' promotion waits on: user play gate, the GAME_CHECKLIST §8 phone-playability verdict on a real deal, and the still-open v0.3.20 slow-mo ghost check (?slowmo=4).
+- Version 0.5.4 → 0.6.0 (minor: new game).
 
 ### BACKLOG: home-grid evolution (captured 2026-10-21, user)
 - Family color-coding on game tiles (a partial slice is possible pre-D6).

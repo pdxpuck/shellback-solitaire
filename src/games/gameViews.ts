@@ -2,13 +2,13 @@
  * gameViews — the per-game view config map. GameView is game-agnostic: it
  * renders whatever `definition` + `session` it is handed, plus one piece of
  * presentation glue — the glyph on an EMPTY foundation slot (pure chrome:
- * Klondike shows the foundation's suit, Canfield shows the base rank every
- * empty foundation opens with). App resolves a registry id ('klondike',
- * 'canfield') to its config here; a game becomes Preview-able by adding one
- * entry.
+ * Klondike and FreeCell show the foundation's suit, Canfield shows the base
+ * rank every empty foundation opens with). App resolves a registry id
+ * ('klondike', 'canfield', 'freecell') to its config here; a game becomes
+ * Preview-able by adding one entry.
  *
  * GameSession is exactly the play.ts surface GameView consumes: deal-number
- * helpers, save/load, world replay, move-group commit, win check. Both
+ * helpers, save/load, world replay, move-group commit, win check. All
  * games' play modules share the same shape (GameState = seed + move-group
  * log), so one interface covers them; binding each module to it at module
  * load makes any surface drift a compile error, not a runtime surprise.
@@ -24,6 +24,8 @@ import type { Action, PileId, World } from 'deckhand/engine'
 import { RANK_LABELS } from 'deckhand/engine'
 import { baseRank, canfield } from './canfield/definition'
 import * as canfieldPlay from './canfield/play'
+import { freecell } from './freecell/definition'
+import * as freecellPlay from './freecell/play'
 import { klondikeDraw1 } from './klondike/definition'
 import * as klondikePlay from './klondike/play'
 
@@ -82,9 +84,20 @@ export interface GameViewConfig {
 // added, removed, or renamed in a play.ts fails THIS assignment, not the view.
 const klondikeSession: GameSession = klondikePlay
 const canfieldSession: GameSession = canfieldPlay
+const freecellSession: GameSession = freecellPlay
 
 /** Klondike's suit-keyed empty-foundation glyphs, by foundation pile id. */
 const KLONDIKE_FOUNDATION_GLYPHS: Partial<Record<PileId, string>> = {
+  'found-S': '♠',
+  'found-H': '♥',
+  'found-D': '♦',
+  'found-C': '♣',
+}
+
+/** FreeCell's suit-keyed empty-foundation glyphs — Klondike's pattern:
+ *  FreeCell foundations are suit-keyed (found-S/H/D/C), so each empty slot
+ *  shows the suit that builds there. */
+const FREECELL_FOUNDATION_GLYPHS: Partial<Record<PileId, string>> = {
   'found-S': '♠',
   'found-H': '♥',
   'found-D': '♦',
@@ -172,6 +185,46 @@ const CANFIELD_RULES: GameRules = {
   ],
 }
 
+const FREECELL_RULES: GameRules = {
+  intro:
+    'Move all 52 cards — every one dealt face up — to the four foundations, ace to king in suit, and the game is won.',
+  sections: [
+    {
+      heading: 'The deal',
+      items: [
+        'All 52 cards are dealt face up into eight cascades — four of seven, four of six.',
+        'Four free cells sit above the cascades. No stock, no redeal — what you see is the whole game.',
+      ],
+    },
+    {
+      heading: 'Building',
+      items: [
+        'Cascades build DOWN in alternating colors.',
+        'Foundations build UP in suit from ace to king — no wrapping.',
+        'An EMPTY cascade takes ANY card — no king rule here.',
+      ],
+    },
+    {
+      heading: 'Free cells',
+      items: [
+        'Each free cell holds ONE card — any card can park in any empty cell.',
+        'Cell cards play back out to cascades or foundations freely.',
+      ],
+    },
+    {
+      heading: 'Moving',
+      items: [
+        'Any descending alternating-color run moves whole — as far as your free cells and empty columns allow (supermoves are worked out for you).',
+        'Tap a card to select it, then tap a destination; single-tap quick-move, drag, and double-click all work as in the other games.',
+      ],
+    },
+    {
+      heading: 'Foundations are one-way',
+      items: ['Cards never come back off a foundation — fly them only when you mean it.'],
+    },
+  ],
+}
+
 const KLONDIKE_PILE_LABELS: Readonly<Record<string, string>> = {
   stock: 'Stock',
   waste: 'Waste',
@@ -202,6 +255,25 @@ const CANFIELD_PILE_LABELS: Readonly<Record<string, string>> = {
   waste: 'Waste',
 }
 
+const FREECELL_PILE_LABELS: Readonly<Record<string, string>> = {
+  'cell-0': 'Free cells',
+  'cell-1': 'Free cells',
+  'cell-2': 'Free cells',
+  'cell-3': 'Free cells',
+  'found-S': 'Foundations',
+  'found-H': 'Foundations',
+  'found-D': 'Foundations',
+  'found-C': 'Foundations',
+  t0: 'Cascades',
+  t1: 'Cascades',
+  t2: 'Cascades',
+  t3: 'Cascades',
+  t4: 'Cascades',
+  t5: 'Cascades',
+  t6: 'Cascades',
+  t7: 'Cascades',
+}
+
 const KLONDIKE_VIEW: GameViewConfig = {
   definition: klondikeDraw1,
   session: klondikeSession,
@@ -221,11 +293,22 @@ const CANFIELD_VIEW: GameViewConfig = {
   pileLabels: CANFIELD_PILE_LABELS,
 }
 
+const FREECELL_VIEW: GameViewConfig = {
+  definition: freecell,
+  session: freecellSession,
+  // FreeCell's foundations are suit-keyed like Klondike's — each empty slot
+  // shows the suit that builds there.
+  emptyFoundationGlyph: (_world, pileId) => FREECELL_FOUNDATION_GLYPHS[pileId] ?? '',
+  rules: FREECELL_RULES,
+  pileLabels: FREECELL_PILE_LABELS,
+}
+
 /** Every shipped game's view config, by registry id — exported for the
  *  config-invariant tests (rules content + diagram labels are gated). */
 export const GAME_VIEWS: Readonly<Record<string, GameViewConfig | undefined>> = {
   klondike: KLONDIKE_VIEW,
   canfield: CANFIELD_VIEW,
+  freecell: FREECELL_VIEW,
 }
 
 /** The view config for a registry game id, or undefined when the game has

@@ -252,6 +252,18 @@ function GameView({
   /** Pile id → layout column, from the game definition's layout hints. */
   const LAYOUT_COL = new Map(definition.layout.map((hint) => [hint.pileId, hint.col]))
 
+  /** Board column count, derived from the layout hints — max col + 1
+   *  (7 for Klondike/Canfield, 8 for FreeCell). The stylesheet's fixed
+   *  repeat(7, 1fr) stays the no-JS fallback underneath. */
+  const BOARD_COLUMNS = Math.max(...definition.layout.map((hint) => hint.col)) + 1
+
+  /** Whether the game has depth chrome (v0.5.1 board pads): the depth
+   *  slivers and waste fan exist only for waste/reserve games — derived
+   *  from the definition's pile roles, never a per-game branch. */
+  const hasDepthChrome = definition.piles.some(
+    (pile) => pile.role === 'waste' || pile.role === 'reserve',
+  )
+
   // Card size (L2 mobile pass): derived ONCE per view mount from the
   // viewport width — the same mount-constant discipline as columnHeight
   // below (viewport changes mid-game must not reflow the table). Unwind
@@ -262,14 +274,15 @@ function GameView({
   // proportional to the card width, so the solve derives it internally.
   const [cardWidth] = useState(() => {
     const gameScreenInner = window.innerWidth - 2 * gameScreenPadX(window.innerWidth)
-    return cardWidthFor(Math.min(gameScreenInner, BOARD_MAX_WIDTH))
+    return cardWidthFor(Math.min(gameScreenInner, BOARD_MAX_WIDTH), BOARD_COLUMNS, hasDepthChrome)
   })
   /** The mount-constant inter-column gap — a flat tap-gutter floor on
    *  phones, ramping to the 12px keeper gap at the desktop card. */
   const gap = gapFor(cardWidth)
   /** The mount-constant board chrome paddings (v0.5.1) — applied inline
-   *  over the stylesheet's fixed 16/32 no-JS fallback. */
-  const pads = boardPads(cardWidth)
+   *  over the stylesheet's fixed 16/32 no-JS fallback; zero for no-chrome
+   *  games (no waste/reserve roles → no fan/sliver overhangs). */
+  const pads = boardPads(cardWidth, hasDepthChrome)
   /** THE shared waste-fan step (v0.5.1): both the board's fan render and
    *  the flight-landing offsets consume this one value — a stale literal
    *  in either path mislands flights (the v0.4.3 lesson). */
@@ -1123,20 +1136,20 @@ function GameView({
             gap, and (v0.5.1) the proportional chrome paddings: the
             sliver/fan reserves shrink with the cards (stylesheet's fixed
             16/32 remain the no-JS fallback underneath). With slack the
-            tracks stretch exactly like the stylesheet's 1fr (laptop: 960
-            outer − {16,32} chrome = 912 content − 6×12 gaps = 840, 840/7 =
-            120px tracks ≥ the 90px card → byte-identical pitch to the
-            pre-L2 keeper); without slack the minmax floor is the derived
-            cardWidth, which cardWidthFor guarantees fits.
+            tracks stretch exactly like the stylesheet's 1fr; without slack
+            the minmax floor is the derived cardWidth, which cardWidthFor
+            guarantees fits. The column count derives from the definition's
+            layout (max col + 1 — 7 for Klondike/Canfield, 8 for FreeCell),
+            so the felt generalizes per config; the stylesheet's fixed
+            repeat(7, 1fr) stays the no-JS fallback underneath.
             Cards render at cardWidth px inside ≥cardWidth tracks —
-            flights/drops measure DOM rects and follow. The stylesheet's
-            repeat(7, 1fr) stays as the no-JS fallback underneath. */}
+            flights/drops measure DOM rects and follow. */}
         <section
           className="board"
           ref={boardRef}
           aria-label={`${meta.title} table`}
           style={{
-            gridTemplateColumns: `repeat(7, minmax(${cardWidth}px, 1fr))`,
+            gridTemplateColumns: `repeat(${BOARD_COLUMNS}, minmax(${cardWidth}px, 1fr))`,
             columnGap: gap,
             rowGap: gap + 4,
             paddingLeft: pads.left,
